@@ -6,16 +6,21 @@ from decimal import Decimal
 
 import streamlit as st
 from openpyxl import load_workbook
-from docx import Document
-from docx.table import _Cell, Table
-from docx.text.paragraph import Paragraph
+from docxtpl import DocxTemplate
 
-PLACEHOLDER_RE = re.compile(r"\{\{([A-Z]+[0-9]+)\}\}")   # {{A1}}, {{B7}} ...
-DEFAULT_OUT = f"{datetime.today():%Y%m%d}_#_납입요청서_DB저축은행.docx"
+# =========================
+# 설정값
+# =========================
 TARGET_SHEET = "2.  배정후 청약시"
+CELL_TOKEN_RE = re.compile(r"\{\{([A-Z]+[0-9]+)\}\}")  # {{A1}}, {{B7}} ...
+SPACER = "    "  # 년/월/일 사이 공백 4칸
+DEFAULT_OUT = f"{datetime.today():%Y%m%d}_#_납입요청서_DB저축은행.docx"
 
-# ---------- 값 포맷 함수 ----------
-def try_format_as_date(v) -> str:
+
+# =========================
+# 값 포맷 함수
+# =========================
+def try_format_as_date(v):
     try:
         if v is None:
             return ""
@@ -29,7 +34,8 @@ def try_format_as_date(v) -> str:
         pass
     return ""
 
-def fmt_number(v) -> str:
+
+def fmt_number(v):
     try:
         if isinstance(v, (int, float, Decimal)):
             return f"{float(v):,.0f}"
@@ -41,7 +47,8 @@ def fmt_number(v) -> str:
         pass
     return ""
 
-def value_to_text(v) -> str:
+
+def value_to_text(v):
     # 1) 날짜 우선
     s = try_format_as_date(v)
     if s:
@@ -53,147 +60,113 @@ def value_to_text(v) -> str:
     # 3) 일반 문자열
     return "" if v is None else str(v)
 
-# ---------- 문서 치환 유틸 ----------
-def iter_block_items(parent):
-    """문서의 문단/표 셀 모두 순회 (본문, 헤더/푸터 공통 사용)."""
-    if hasattr(parent, "element") and hasattr(parent, "paragraphs"):
-        for p in parent.paragraphs:
-            yield p
-        for t in parent.tables:
-            for row in t.rows:
-                for cell in row.cells:
-                    for item in iter_block_items(cell):
-                        yield item
-    elif isinstance(parent, _Cell):
-        for p in parent.paragraphs:
-            yield p
-        for t in parent.tables:
-            for row in t.rows:
-                for cell in row.cells:
-                    for item in iter_block_items(cell):
-                        yield item
 
-def replace_in_paragraph(par: Paragraph, repl_func):
-    # 토큰이 run 하나 안에만 있으면 그 run만 치환(서식 유지)
-    changed = False
-    for run in par.runs:
-        new_text = repl_func(run.text)
-        if new_text != run.text:
-            run.text = new_text  # 이 경우 run 서식 유지됨
-            changed = True
-    if changed:
-        return
+def ensure_docx(name: str) -> str:
+    name = (name or "").strip()
+    return name if name.lower().endswith(".docx") else (name + ".docx")
 
-    # 여러 run에 걸쳐 토큰이 끊긴 경우에만 문단 전체 텍스트 합쳐 치환
-    full_text = "".join(r.text for r in par.runs)
-    new_text = repl_func(full_text)
-    if new_text == full_text:
-        return
 
-    # 최소 파괴적으로: 첫 run에만 새 텍스트 넣고 나머지 run은 텍스트만 비우기
-    # (첫 run의 서식이 대표로 적용됨)
-    if par.runs:
-        par.runs[0].text = new_text
-        for r in par.runs[1:]:
-            r.text = ""  # run 객체는 남겨 서식 붕괴 최소화
-
-def replace_everywhere(doc: Document, repl_func):
-    # 본문
-    for item in iter_block_items(doc):
-        if isinstance(item, Paragraph):
-            replace_in_paragraph(item, repl_func)
-
-    # 머리글/바닥글
-    for section in doc.sections:
-        header = section.header
-        footer = section.footer
-        for container in (header, footer):
-            for item in iter_block_items(container):
-                if isinstance(item, Paragraph):
-                    replace_in_paragraph(item, repl_func)
-
+# =========================
+# 전체 폰트 강제 통일(선택)
+# =========================
 def force_font(doc, font_name="한컴바탕"):
+    """
+    경고: 문서 전체 run의 글꼴을 지정 폰트로 통일한다.
+    굵기/기울임/색/크기는 유지되지만, '다른 폰트' 의도는 사라진다.
+    """
+    # 본문
     for p in doc.paragraphs:
         for r in p.runs:
             r.font.name = font_name
+    # 머리글/바닥글
     for section in doc.sections:
-        for hdrftr in (section.header, section.footer):
-            for p in hdrftr.paragraphs:
+        for container in (section.header, section.footer):
+            for p in container.paragraphs:
                 for r in p.runs:
                     r.font.name = font_name
 
-# ---------- Excel → 치환 콜백 ----------
-def make_replacer(ws):
-    # ws[cell]을 읽어 포맷해서 돌려주는 콜백
-    def _repl(text: str) -> str:
-        # 1) {{A1}} 같은 토큰 치환
-        def cell_sub(m):
-            addr = m.group(1)
-            try:
-                v = ws[addr].value
-            except Exception:
-                v = None
-            return value_to_text(v)
 
-        replaced = PLACEHOLDER_RE.sub(cell_sub, text)
-
-        # 2) 날짜 템플릿 치환
-        sp = "    "
-        today = datetime.today()
-        today_str = f"{today.year}년{sp}{today.month}월{sp}{today.day}일"
-        for token in ["YYYY년    MM월    DD일"]:
-            replaced = replaced.replace(token, today_str)
-        return replaced
-    return _repl
-
-# ---------- Streamlit UI ----------
-st.title("Word 템플릿 치환")
+# =========================
+# Streamlit UI
+# =========================
+st.title("Word 템플릿 치환 (엑셀 셀 → docx)")
+st.caption(
+    "· 템플릿의 {{A1}}, {{B7}} 토큰을 엑셀 값으로 치환합니다. "
+    "· 날짜는 {{TODAY}} 토큰을 사용하세요(년/월/일 사이 공백 4칸). "
+    "· 시트는 자동으로 '2.  배정후 청약시'를 선택합니다(없으면 첫 시트)."
+)
 
 xlsx_file = st.file_uploader("엑셀 파일(.xlsx, .xlsm)", type=["xlsx", "xlsm"])
 docx_tpl = st.file_uploader("워드 템플릿(.docx)", type=["docx"])
+
+c1, c2 = st.columns(2)
+with c1:
+    strict = st.checkbox("시트명이 없으면 중단", value=False)
+with c2:
+    unify_font = st.checkbox("문서 전체 폰트를 한컴바탕으로 통일", value=False)
 
 col1, = st.columns(1)
 with col1:
     out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
 
-run = st.button("문서 생성")
-
-if run:
+if st.button("문서 생성"):
     if not xlsx_file or not docx_tpl:
         st.error("엑셀 파일과 워드 템플릿을 모두 업로드하세요.")
         st.stop()
 
     try:
-        # Excel 로드
+        # -------- Excel 로드 --------
         wb = load_workbook(filename=io.BytesIO(xlsx_file.read()), data_only=True)
         sheet_names = wb.sheetnames
         if TARGET_SHEET in sheet_names:
             ws = wb[TARGET_SHEET]
         else:
-            if do_strict:
+            if strict:
                 st.error(f"시트 '{TARGET_SHEET}' 를 찾지 못했습니다.")
                 st.stop()
             ws = wb[sheet_names[0]]
 
-        # Word 템플릿 로드
-        doc = Document(io.BytesIO(docx_tpl.read()))
+        # -------- 템플릿에서 필요한 셀 토큰 스캔 --------
+        tpl_bytes = docx_tpl.read()
+        # docxtpl은 컨텍스트 키만 치환하므로, 템플릿에 실제 쓰인 키만 수집
+        text_for_scan = tpl_bytes.decode("utf-8", errors="ignore")
+        needed_cells = set(m.group(1) for m in CELL_TOKEN_RE.finditer(text_for_scan))
 
-        # 치환 실행
-        replacer = make_replacer(ws)
-        replace_everywhere(doc, replacer)
+        # -------- 컨텍스트 구성 --------
+        ctx = {}
+        for addr in needed_cells:
+            try:
+                v = ws[addr].value
+            except Exception:
+                v = None
+            ctx[addr] = value_to_text(v)
 
-        # 결과 저장 → 다운로드 버튼
+        # 날짜(YYYY    MM    DD 간격 4칸) -> {{TODAY}} 로 넣기
+        today = datetime.today()
+        ctx["TODAY"] = f"{today.year}년{SPACER}{today.month}월{SPACER}{today.day}일"
+
+        # -------- 템플릿 렌더 --------
+        doc = DocxTemplate(io.BytesIO(tpl_bytes))
+        doc.render(ctx)
+
+        # 필요시 전체 폰트 통일
+        if unify_font:
+            force_font(doc, "한컴바탕")
+
+        # -------- 결과 저장/다운로드 --------
         buf = io.BytesIO()
         doc.save(buf)
         buf.seek(0)
 
         st.success("완료되었습니다.")
         st.download_button(
-            label="결과 문서 다운로드",
+            "결과 문서 다운로드",
             data=buf,
-            file_name=out_name if out_name.strip() else "출력.docx",
+            file_name=ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT,
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
+
+        st.info("팁: 템플릿에서 날짜 위치는 'YYYY년 MM월 DD일'처럼 고정 텍스트 대신 {{TODAY}} 토큰을 사용하세요. 토큰이 들어간 그 자리에 준 서식(폰트/크기)이 유지됩니다.")
 
     except Exception as e:
         st.exception(e)
