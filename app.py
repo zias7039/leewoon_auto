@@ -138,8 +138,7 @@ def make_replacer(ws):
     return _repl
 
 # ---------- Streamlit UI ----------
-st.title("Word 템플릿 치환 (엑셀 셀 참조)")
-st.caption("· 템플릿의 {{A1}}, {{B7}} 토큰을 엑셀 값으로 치환합니다.  · 'YYYY년 MM월 DD일'은 오늘 날짜로 바뀝니다.  · 시트명은 자동으로 '2.  배정후 청약시'를 사용합니다.")
+st.title("Word 템플릿 치환")
 
 xlsx_file = st.file_uploader("엑셀 파일(.xlsx, .xlsm)", type=["xlsx", "xlsm"])
 docx_tpl = st.file_uploader("워드 템플릿(.docx)", type=["docx"])
