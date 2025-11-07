@@ -143,7 +143,7 @@ st.title("Word 템플릿 치환")
 xlsx_file = st.file_uploader("엑셀 파일(.xlsx, .xlsm)", type=["xlsx", "xlsm"])
 docx_tpl = st.file_uploader("워드 템플릿(.docx)", type=["docx"])
 
-col1= st.columns(1)
+col1, = st.columns(1)
 with col1:
     out_name = st.text_input("출력 파일명", value="출력.docx")
 
