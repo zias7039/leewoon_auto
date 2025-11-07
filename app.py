@@ -11,7 +11,7 @@ from docx.table import _Cell, Table
 from docx.text.paragraph import Paragraph
 
 PLACEHOLDER_RE = re.compile(r"\{\{([A-Z]+[0-9]+)\}\}")   # {{A1}}, {{B7}} ...
-
+DEFAULT_OUT = f"{datetime.today():%Y%m%d}_#_납입요청서_DB저축은행.docx"
 TARGET_SHEET = "2.  배정후 청약시"
 
 # ---------- 값 포맷 함수 ----------
@@ -145,7 +145,7 @@ docx_tpl = st.file_uploader("워드 템플릿(.docx)", type=["docx"])
 
 col1, = st.columns(1)
 with col1:
-    out_name = st.text_input("출력 파일명", value="출력.docx")
+    out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
 
 run = st.button("문서 생성")
 
