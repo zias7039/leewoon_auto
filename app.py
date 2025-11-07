@@ -143,10 +143,8 @@ st.title("Word 템플릿 치환")
 xlsx_file = st.file_uploader("엑셀 파일(.xlsx, .xlsm)", type=["xlsx", "xlsm"])
 docx_tpl = st.file_uploader("워드 템플릿(.docx)", type=["docx"])
 
-col1, col2 = st.columns(2)
+col1= st.columns(1)
 with col1:
-    do_strict = st.checkbox("시트명이 없으면 중단(기본은 첫 시트로 대체)", value=False)
-with col2:
     out_name = st.text_input("출력 파일명", value="출력.docx")
 
 run = st.button("문서 생성")
