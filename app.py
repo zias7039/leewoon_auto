@@ -74,24 +74,28 @@ def iter_block_items(parent):
                         yield item
 
 def replace_in_paragraph(par: Paragraph, repl_func):
-    """
-    문단의 run 분할로 인해 토큰이 쪼개지는 문제를 피하기 위해
-    모든 run을 합쳐 치환 후 run을 재구성한다.
-    주의: 문단 내 세부 서식(run별 굵게/기울임 등)은 단일 run로 축약될 수 있음.
-    """
-    full_text = "".join(run.text for run in par.runs)
+    # 토큰이 run 하나 안에만 있으면 그 run만 치환(서식 유지)
+    changed = False
+    for run in par.runs:
+        new_text = repl_func(run.text)
+        if new_text != run.text:
+            run.text = new_text  # 이 경우 run 서식 유지됨
+            changed = True
+    if changed:
+        return
+
+    # 여러 run에 걸쳐 토큰이 끊긴 경우에만 문단 전체 텍스트 합쳐 치환
+    full_text = "".join(r.text for r in par.runs)
     new_text = repl_func(full_text)
     if new_text == full_text:
         return
 
-    # 기존 run 제거
-    for _ in range(len(par.runs)):
-        par.runs[0].clear()
-        par.runs[0].text = ""
-        par.runs[0].element.getparent().remove(par.runs[0].element)
-
-    # 새 run 하나로 삽입 (문단 스타일은 유지, run 스타일은 단일화)
-    run = par.add_run(new_text)
+    # 최소 파괴적으로: 첫 run에만 새 텍스트 넣고 나머지 run은 텍스트만 비우기
+    # (첫 run의 서식이 대표로 적용됨)
+    if par.runs:
+        par.runs[0].text = new_text
+        for r in par.runs[1:]:
+            r.text = ""  # run 객체는 남겨 서식 붕괴 최소화
 
 def replace_everywhere(doc: Document, repl_func):
     # 본문
