@@ -112,6 +112,16 @@ def replace_everywhere(doc: Document, repl_func):
                 if isinstance(item, Paragraph):
                     replace_in_paragraph(item, repl_func)
 
+def force_font(doc, font_name="한컴바탕"):
+    for p in doc.paragraphs:
+        for r in p.runs:
+            r.font.name = font_name
+    for section in doc.sections:
+        for hdrftr in (section.header, section.footer):
+            for p in hdrftr.paragraphs:
+                for r in p.runs:
+                    r.font.name = font_name
+
 # ---------- Excel → 치환 콜백 ----------
 def make_replacer(ws):
     # ws[cell]을 읽어 포맷해서 돌려주는 콜백
