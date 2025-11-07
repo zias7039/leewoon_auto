@@ -7,18 +7,25 @@ from decimal import Decimal
 import streamlit as st
 from openpyxl import load_workbook
 from docx import Document
-from docx.table import _Cell, Table
+from docx.table import _Cell
 from docx.text.paragraph import Paragraph
 
 PLACEHOLDER_RE = re.compile(r"\{\{([A-Z]+[0-9]+)\}\}")   # {{A1}}, {{B7}} ...
 DEFAULT_OUT = f"{datetime.today():%Y%m%d}_#_납입요청서_DB저축은행.docx"
 TARGET_SHEET = "2.  배정후 청약시"
 
+# ---------- 유틸 ----------
+def ensure_docx(name: str) -> str:
+    name = (name or "").strip()
+    return name if name.lower().endswith(".docx") else (name + ".docx")
+
 # ---------- 값 포맷 함수 ----------
 def force_font(doc, font_name="한컴바탕"):
+    # 본문
     for p in doc.paragraphs:
         for r in p.runs:
             r.font.name = font_name
+    # 머리글/바닥글
     for section in doc.sections:
         for hdrftr in (section.header, section.footer):
             for p in hdrftr.paragraphs:
@@ -52,15 +59,12 @@ def fmt_number(v) -> str:
     return ""
 
 def value_to_text(v) -> str:
-    # 1) 날짜 우선
     s = try_format_as_date(v)
     if s:
         return s
-    # 2) 숫자 포맷
     s = fmt_number(v)
     if s:
         return s
-    # 3) 일반 문자열
     return "" if v is None else str(v)
 
 # ---------- 문서 치환 유틸 ----------
@@ -84,47 +88,39 @@ def iter_block_items(parent):
                         yield item
 
 def replace_in_paragraph(par: Paragraph, repl_func):
-    # 토큰이 run 하나 안에만 있으면 그 run만 치환(서식 유지)
+    # 1) run 단위로 치환 시도(서식 보존)
     changed = False
     for run in par.runs:
         new_text = repl_func(run.text)
         if new_text != run.text:
-            run.text = new_text  # 이 경우 run 서식 유지됨
+            run.text = new_text
             changed = True
     if changed:
         return
-
-    # 여러 run에 걸쳐 토큰이 끊긴 경우에만 문단 전체 텍스트 합쳐 치환
+    # 2) 여러 run에 걸친 토큰만 문단 전체 텍스트 기준으로 치환(최소 파괴)
     full_text = "".join(r.text for r in par.runs)
     new_text = repl_func(full_text)
     if new_text == full_text:
         return
-
-    # 최소 파괴적으로: 첫 run에만 새 텍스트 넣고 나머지 run은 텍스트만 비우기
-    # (첫 run의 서식이 대표로 적용됨)
     if par.runs:
         par.runs[0].text = new_text
         for r in par.runs[1:]:
-            r.text = ""  # run 객체는 남겨 서식 붕괴 최소화
+            r.text = ""  # run 객체는 남겨 레이아웃 변화 최소화
 
 def replace_everywhere(doc: Document, repl_func):
     # 본문
     for item in iter_block_items(doc):
         if isinstance(item, Paragraph):
             replace_in_paragraph(item, repl_func)
-
     # 머리글/바닥글
     for section in doc.sections:
-        header = section.header
-        footer = section.footer
-        for container in (header, footer):
+        for container in (section.header, section.footer):
             for item in iter_block_items(container):
                 if isinstance(item, Paragraph):
                     replace_in_paragraph(item, repl_func)
 
 # ---------- Excel → 치환 콜백 ----------
 def make_replacer(ws):
-    # ws[cell]을 읽어 포맷해서 돌려주는 콜백
     def _repl(text: str) -> str:
         # 1) {{A1}} 같은 토큰 치환
         def cell_sub(m):
@@ -137,20 +133,31 @@ def make_replacer(ws):
 
         replaced = PLACEHOLDER_RE.sub(cell_sub, text)
 
-        # 2) 날짜 템플릿 치환
+        # 2) 날짜 템플릿 치환 (년/월/일 사이 공백 4칸)
         sp = "    "
         today = datetime.today()
         today_str = f"{today.year}년{sp}{today.month}월{sp}{today.day}일"
-        for token in ["YYYY년    MM월    DD일"]:
+        for token in [
+            "YYYY년 MM월 DD일",
+            "YYYY년    MM월    DD일",
+            "YYYY 년 MM 월 DD 일",
+        ]:
             replaced = replaced.replace(token, today_str)
         return replaced
     return _repl
 
 # ---------- Streamlit UI ----------
-st.title("Word 템플릿 치환")
+st.title("Word 템플릿 치환 (python-docx)")
+st.caption("· 템플릿의 {{A1}}, {{B7}} 토큰을 엑셀 값으로 치환 · 'YYYY년 MM월 DD일'은 공백 4칸으로 오늘 날짜로 치환")
 
 xlsx_file = st.file_uploader("엑셀 파일(.xlsx, .xlsm)", type=["xlsx", "xlsm"])
 docx_tpl = st.file_uploader("워드 템플릿(.docx)", type=["docx"])
+
+c1, c2 = st.columns(2)
+with c1:
+    do_strict = st.checkbox("시트명이 없으면 중단", value=False)  # ← 정의 추가
+with c2:
+    unify_font = st.checkbox("문서 전체 글꼴을 한컴바탕으로 통일", value=False)
 
 col1, = st.columns(1)
 with col1:
@@ -176,11 +183,16 @@ if run:
             ws = wb[sheet_names[0]]
 
         # Word 템플릿 로드
-        doc = Document(io.BytesIO(docx_tpl.read()))
+        tpl_bytes = docx_tpl.read()
+        doc = Document(io.BytesIO(tpl_bytes))
 
         # 치환 실행
         replacer = make_replacer(ws)
         replace_everywhere(doc, replacer)
+
+        # 글꼴 통일 옵션
+        if unify_font:
+            force_font(doc, "한컴바탕")
 
         # 결과 저장 → 다운로드 버튼
         buf = io.BytesIO()
@@ -191,7 +203,7 @@ if run:
         st.download_button(
             label="결과 문서 다운로드",
             data=buf,
-            file_name=out_name if out_name.strip() else "출력.docx",
+            file_name=ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT,
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
 
