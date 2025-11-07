@@ -128,17 +128,12 @@ def make_replacer(ws):
         replaced = PLACEHOLDER_RE.sub(cell_sub, text)
 
         # 2) 날짜 템플릿 치환
+        sp = "    "
         today = datetime.today()
-        today_str = f"{today.year}년 {today.month}월 {today.day}일"
-        for token in [
-            "YYYY년 MM월 DD일",
-            "YYYY년    MM월    DD일",
-            "YYYY 년 MM 월 DD 일",
-        ]:
+        today_str = f"{today.year}년{sp}{today.month}월{sp}{today.day}일"
+        for token in ["YYYY년    MM월    DD일"]:
             replaced = replaced.replace(token, today_str)
-
         return replaced
-
     return _repl
 
 # ---------- Streamlit UI ----------
