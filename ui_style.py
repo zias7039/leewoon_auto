@@ -39,19 +39,33 @@ footer {visibility: hidden;}
 
 /* ===== Excel 전용 테마 (우선 적용 위해 파일 끝쪽에 둠) ===== */
 .upload-card.excel-upload [data-testid="stFileUploaderDropzone"] {
-  border: 1px solid color-mix(in srgb, var(--excel-green) 70%, white);
-  background: color-mix(in srgb, var(--excel-green) 12%, transparent);
+  border: 1px solid rgba(33, 115, 70, 0.55);
+  background: rgba(33, 115, 70, 0.12);
 }
 .upload-card.excel-upload [data-testid="stFileUploaderDropzone"] p,
 .upload-card.excel-upload [data-testid="stFileUploaderDropzone"] span {
-  color: color-mix(in srgb, var(--excel-green) 85%, white);
+  color: rgba(33, 115, 70, 0.85);
 }
 .upload-card.excel-upload [data-testid="stFileUploader"] button {
   background: var(--excel-green);
-  border: 1px solid color-mix(in srgb, var(--excel-green) 60%, white);
+  border: 1px solid rgba(33, 115, 70, 0.6);
   color: white;
 }
 .upload-card.excel-upload [data-testid="stFileUploader"] button:hover { filter: brightness(1.08); }
+
+@supports (background: color-mix(in srgb, white 10%, black)) {
+  .upload-card.excel-upload [data-testid="stFileUploaderDropzone"] {
+    border: 1px solid color-mix(in srgb, var(--excel-green) 70%, white);
+    background: color-mix(in srgb, var(--excel-green) 12%, transparent);
+  }
+  .upload-card.excel-upload [data-testid="stFileUploaderDropzone"] p,
+  .upload-card.excel-upload [data-testid="stFileUploaderDropzone"] span {
+    color: color-mix(in srgb, var(--excel-green) 85%, white);
+  }
+  .upload-card.excel-upload [data-testid="stFileUploader"] button {
+    border: 1px solid color-mix(in srgb, var(--excel-green) 60%, white);
+  }
+}
 """
 
 def inject():
