@@ -284,24 +284,5 @@ if run:
             mime="application/zip",
         )
 
-        col_docx, col_pdf = st.columns(2)
-        with col_docx:
-            st.download_button(
-                "WORD 내려받기 (.docx)",
-                data=docx_bytes,
-                file_name=ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT,
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            )
-        with col_pdf:
-            if pdf_ready:
-                st.download_button(
-                    "PDF 내려받기 (.pdf)",
-                    data=pdf_bytes,
-                    file_name=ensure_pdf(out_name),
-                    mime="application/pdf",
-                )
-            else:
-                st.warning("PDF 변환 실패: Word/LibreOffice 미설치 또는 권한 문제일 수 있어요.")
-
     except Exception as e:
         st.exception(e)
