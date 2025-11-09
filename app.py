@@ -246,79 +246,74 @@ st.set_page_config(
 # 최소 CSS 다듬기
 st.markdown("""
 <style>
-/* 상단 햄버거/푸터 숨김 */
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-/* 카드 느낌의 컨테이너 */
-.block-container {padding-top: 1.2rem;}
-div[data-testid="stForm"] {border: 1px solid rgba(0,0,0,.08); padding: 1rem 1rem 0.5rem 1rem; border-radius: 12px;}
-/* 버튼 약간 크게 */
-.stButton>button {height: 44px; border-radius: 10px;}
-/* 다운로드 버튼 너비 고정 */
-[data-testid="stDownloadButton"] > button {min-width: 220px;}
-/* 작은 캡션 */
-.small-note {font-size:.85rem; color: rgba(0,0,0,.6);}
-
-[data-testid="stFileUploaderDropzone"] {
-  background-color: rgba(255, 255, 255, 0.08);   /* 업로드 박스 배경색 */
-  border: 1px solid rgba(255,255,255,0.25);      /* 테두리 색 */
-  border-radius: 12px;                            /* 둥글기 */
+/* 공통 glass layer */
+.excel-upload [data-testid="stFileUploaderDropzone"],
+.word-upload [data-testid="stFileUploaderDropzone"] {
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-radius: 14px !important;
+  border: 1px solid rgba(255,255,255,0.22) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+  transition: 0.25s ease;
+  padding: 6px !important;
 }
 
-/* 호버 시 색 변화 */
-[data-testid="stFileUploaderDropzone"]:hover {
-  background-color: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255,255,255,0.36);
-}
-
-/* 내부 텍스트 정제 */
-[data-testid="stFileUploaderDropzone"] > div {
-  color: #e5e7eb;   /* 텍스트 색 */
-}
-
-/* 업로더 버튼 색 */
-[data-testid="stFileUploaderBrowseButton"] {
-  background: #475569 !important;
-  color: white !important;
-  border-radius: 8px !important;
-}
-[data-testid="stFileUploaderBrowseButton"]:hover {
-  background: #64748b !important;
-}
-
+/* 엑셀 업로드 : glass green */
 .excel-upload [data-testid="stFileUploaderDropzone"] {
-  background: #185C37 !important;      /* Excel Green */
-  border: 1px solid #1e7f51 !important;
-  border-radius: 12px;
+  background: linear-gradient(
+      135deg,
+      rgba(24, 92, 55, 0.55),
+      rgba(24, 92, 55, 0.28)
+  );
 }
 .excel-upload [data-testid="stFileUploaderDropzone"]:hover {
-  background: #1e7f51 !important;
-}
-.excel-upload [data-testid="stFileUploaderBrowseButton"] {
-  background: #0f3f26 !important;
-  color: white !important;
-  border-radius: 8px !important;
+  background: linear-gradient(
+      135deg,
+      rgba(24, 92, 55, 0.68),
+      rgba(24, 92, 55, 0.38)
+  );
 }
 
-/* Word Blue */
+/* 워드 업로드 : glass blue */
 .word-upload [data-testid="stFileUploaderDropzone"] {
-  background: #185ABD !important;      /* Word Blue */
-  border: 1px solid #2a6cf0 !important;
-  border-radius: 12px;
+  background: linear-gradient(
+      135deg,
+      rgba(24, 90, 189, 0.55),
+      rgba(24, 90, 189, 0.28)
+  );
 }
 .word-upload [data-testid="stFileUploaderDropzone"]:hover {
-  background: #2a6cf0 !important;
-}
-.word-upload [data-testid="stFileUploaderBrowseButton"] {
-  background: #103c82 !important;
-  color: white !important;
-  border-radius: 8px !important;
+  background: linear-gradient(
+      135deg,
+      rgba(24, 90, 189, 0.68),
+      rgba(24, 90, 189, 0.38)
+  );
 }
 
-/* 내부 텍스트 색 통일 */
+/* 내부 텍스트 색 */
 .excel-upload [data-testid="stFileUploaderDropzone"] div,
 .word-upload [data-testid="stFileUploaderDropzone"] div {
+  color: rgba(255,255,255,0.92) !important;
+  font-weight: 500;
+}
+
+/* Browse 버튼 */
+.excel-upload [data-testid="stFileUploaderBrowseButton"],
+.word-upload [data-testid="stFileUploaderBrowseButton"] {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: rgba(0,0,0,0.35) !important;
+  border: 1px solid rgba(255,255,255,0.35) !important;
   color: white !important;
+  border-radius: 10px !important;
+  padding: 6px 16px !important;
+  transition: 0.25s ease;
+}
+
+.excel-upload [data-testid="stFileUploaderBrowseButton"]:hover,
+.word-upload [data-testid="stFileUploaderBrowseButton"]:hover {
+  background: rgba(0,0,0,0.55) !important;
+  border-color: rgba(255,255,255,0.55) !important;
 }
 </style>
 """, unsafe_allow_html=True)
