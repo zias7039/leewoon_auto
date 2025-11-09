@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import sys, os
 import io
 import os
 import re
@@ -15,7 +16,8 @@ from docx.table import _Cell
 from docx.text.paragraph import Paragraph
 
 # 새로 추가: 스타일 모듈
-from .ui_style import inject as inject_style, open_div, close_div, h4
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from ui_style import inject as inject_style, open_div, close_div, h4
 
 # 선택: docx2pdf가 있으면 활용
 try:
