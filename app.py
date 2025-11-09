@@ -150,7 +150,7 @@ st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
 col_left, col_right = st.columns([1.2,1])
 
 with col_left:
-    open_div("upload-card")
+    open_div("upload-card excel-upload")
     with st.form("input_form"):
         xlsx_file = st.file_uploader("엑셀 파일", type=["xlsx","xlsm"])
         docx_tpl  = st.file_uploader("워드 템플릿(.docx)", type=["docx"])
