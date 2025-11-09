@@ -1,0 +1,5 @@
+libreoffice
+libreoffice-writer
+libreoffice-core
+fonts-noto-cjk
+fonts-nanum
