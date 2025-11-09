@@ -2,3 +2,4 @@ streamlit
 python-docx
 openpyxl
 docxtpl
+docx2pdf
