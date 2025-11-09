@@ -10,8 +10,8 @@ from docx import Document
 from docx.table import _Cell
 from docx.text.paragraph import Paragraph
 
-# 스타일 모듈 (스크립트 모드라면 이 줄 그대로)
-from ui_style import inject as inject_style, open_div, close_div, h4
+# 스타일 모듈
+from ui_style import inject as inject_style, h4
 
 # 선택: docx2pdf
 try:
@@ -196,18 +196,34 @@ st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
 col_left, col_right = st.columns([1.2, 1])
 with col_left:
     with st.form("input_form", clear_on_submit=False):
-        # Excel 업로더만 Excel 테마 적용
+        # Excel 업로더 - Excel 테마
         h4("엑셀 파일")
-        open_div("upload-card excel-upload")
-        xlsx_file = st.file_uploader(" ", type=["xlsx", "xlsm"], accept_multiple_files=False, key="xlsx_upl")
-        close_div()
+        with st.container():
+            st.markdown('<div class="excel-uploader">', unsafe_allow_html=True)
+            xlsx_file = st.file_uploader(
+                " ", 
+                type=["xlsx", "xlsm"], 
+                accept_multiple_files=False, 
+                key="xlsx_upl",
+                help="엑셀 파일을 업로드하세요"
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
 
+        # Word 템플릿 업로더 - Word 테마
         h4("워드 템플릿(.docx)")
-        open_div("upload-card")  # 일반 카드(Word는 기본색)
-        docx_tpl = st.file_uploader(" ", type=["docx"], accept_multiple_files=False, key="docx_upl")
-        close_div()
+        with st.container():
+            st.markdown('<div class="word-uploader">', unsafe_allow_html=True)
+            docx_tpl = st.file_uploader(
+                " ", 
+                type=["docx"], 
+                accept_multiple_files=False, 
+                key="docx_upl",
+                help="Word 템플릿 파일을 업로드하세요"
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
 
         out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
+        
         # 시트 선택
         sheet_choice = None
         if xlsx_file is not None:
