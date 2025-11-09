@@ -6,7 +6,7 @@ import streamlit as st
 from docx import Document
 
 from constants import DEFAULT_OUT, TARGET_SHEET
-from .services.generator import generate_documents
+from services.generator import generate_documents
 from leewoon_auto.utils.excel_tools import load_wb_and_guess_sheet
 from leewoon_auto.utils.paths import ensure_docx, ensure_pdf
 
