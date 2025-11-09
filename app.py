@@ -1,220 +1,28 @@
 # -*- coding: utf-8 -*-
-import io, os, re, tempfile, subprocess
-from datetime import datetime, date
-from decimal import Decimal
-from zipfile import ZipFile, ZIP_DEFLATED
+"""Streamlit entry point for 자동 납입요청서 생성기."""
+
+import io
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import streamlit as st
-from openpyxl import load_workbook
-from docx import Document
-from docx.table import _Cell
-from docx.text.paragraph import Paragraph
 
-try:
-    from docx2pdf import convert as docx2pdf_convert
-except Exception:
-    docx2pdf_convert = None
-
-# ---------- 상수 ----------
-TOKEN_RE = re.compile(r"\{\{([A-Z]+[0-9]+)(?:\|([^}]+))?\}\}")
-LEFTOVER_RE = re.compile(r"\{\{[^}]+\}\}")
-DEFAULT_OUT = f"{datetime.today():%Y%m%d}_#_납입요청서_DB저축은행.docx"
-TARGET_SHEET = "2.  배정후 청약시"
-
-# ---------- 유틸 ----------
-def ensure_docx(name: str) -> str:
-    name = (name or "").strip()
-    return name if name.lower().endswith(".docx") else (name + ".docx")
-
-def ensure_pdf(name: str) -> str:
-    base = (name or "output").strip()
-    if base.lower().endswith(".docx"):
-        base = base[:-5]
-    return base + ".pdf"
-
-def has_soffice() -> bool:
-    return any(
-        os.path.isfile(os.path.join(p, "soffice")) or os.path.isfile(os.path.join(p, "soffice.bin"))
-        for p in os.environ.get("PATH", "").split(os.pathsep)
-    )
-
-def try_format_as_date(v) -> str:
-    try:
-        if v is None:
-            return ""
-        if isinstance(v, (datetime, date)):
-            return f"{v.year}. {v.month}. {v.day}."
-        s = str(v).strip()
-        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
-            dt = datetime.strptime(s, "%Y-%m-%d").date()
-            return f"{dt.year}. {dt.month}. {dt.day}."
-    except Exception:
-        pass
-    return ""
-
-def fmt_number(v) -> str:
-    try:
-        if isinstance(v, (int, float, Decimal)):
-            return f"{float(v):,.0f}"
-        if isinstance(v, str):
-            raw = v.replace(",", "")
-            if re.fullmatch(r"-?\d+(\.\d+)?", raw):
-                return f"{float(raw):,.0f}"
-    except Exception:
-        pass
-    return ""
-
-def value_to_text(v) -> str:
-    s = try_format_as_date(v)
-    if s:
-        return s
-    s = fmt_number(v)
-    if s:
-        return s
-    return "" if v is None else str(v)
-
-def apply_inline_format(value, fmt: str | None) -> str:
-    if fmt is None or fmt.strip() == "":
-        return value_to_text(value)
-
-    if any(tok in fmt for tok in ("YYYY", "MM", "DD")):
-        if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip()):
-            value = datetime.strptime(value.strip(), "%Y-%m-%d").date()
-        if isinstance(value, (datetime, date)):
-            f = fmt.replace("YYYY", "%Y").replace("MM", "%m").replace("DD", "%d")
-            return value.strftime(f)
-        return value_to_text(value)
-
-    if re.fullmatch(r"[#,0]+(?:\.[0#]+)?", fmt.replace(",", "")):
-        try:
-            num = float(str(value).replace(",", ""))
-            decimals = 0
-            if "." in fmt:
-                decimals = len(fmt.split(".")[1])
-            return f"{num:,.{decimals}f}"
-        except Exception:
-            return value_to_text(value)
-
-    return value_to_text(value)
-
-def iter_block_items(parent):
-    if hasattr(parent, "paragraphs") and hasattr(parent, "tables"):
-        for p in parent.paragraphs:
-            yield p
-        for t in parent.tables:
-            for row in t.rows:
-                for cell in row.cells:
-                    for item in iter_block_items(cell):
-                        yield item
-    elif isinstance(parent, _Cell):
-        for p in parent.paragraphs:
-            yield p
-        for t in parent.tables:
-            for row in t.rows:
-                for cell in row.cells:
-                    for item in iter_block_items(cell):
-                        yield item
-
-def replace_in_paragraph(par: Paragraph, repl_func):
-    changed = False
-    for run in par.runs:
-        new_text = repl_func(run.text)
-        if new_text != run.text:
-            run.text = new_text
-            changed = True
-    if changed:
-        return
-    full_text = "".join(r.text for r in par.runs)
-    new_text = repl_func(full_text)
-    if new_text == full_text:
-        return
-    if par.runs:
-        par.runs[0].text = new_text
-        for r in par.runs[1:]:
-            r.text = ""
-
-def replace_everywhere(doc: Document, repl_func):
-    for item in iter_block_items(doc):
-        if isinstance(item, Paragraph):
-            replace_in_paragraph(item, repl_func)
-    for section in doc.sections:
-        for container in (section.header, section.footer):
-            for item in iter_block_items(container):
-                if isinstance(item, Paragraph):
-                    replace_in_paragraph(item, repl_func)
-
-def make_replacer(ws):
-    def _repl(text: str) -> str:
-        def sub(m):
-            addr, fmt = m.group(1), m.group(2)
-            try:
-                v = ws[addr].value
-            except Exception:
-                v = None
-            return apply_inline_format(v, fmt)
-        replaced = TOKEN_RE.sub(sub, text)
-
-        sp = "    "
-        today = datetime.today()
-        today_str = f"{today.year}년{sp}{today.month}월{sp}{today.day}일"
-        for token in ["YYYY년 MM월 DD일", "YYYY년    MM월    DD일", "YYYY 년 MM 월 DD 일"]:
-            replaced = replaced.replace(token, today_str)
-        return replaced
-    return _repl
-
-def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> bytes | None:
-    try:
-        with tempfile.TemporaryDirectory() as td:
-            in_path = os.path.join(td, "doc.docx")
-            out_path = os.path.join(td, "doc.pdf")
-            with open(in_path, "wb") as f:
-                f.write(docx_bytes)
-
-            if docx2pdf_convert is not None:
-                try:
-                    docx2pdf_convert(in_path, out_path)
-                    if os.path.exists(out_path):
-                        with open(out_path, "rb") as f:
-                            return f.read()
-                except Exception:
-                    pass
-
-            if has_soffice():
-                try:
-                    subprocess.run(
-                        ["soffice", "--headless", "--convert-to", "pdf", in_path, "--outdir", td],
-                        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-                    )
-                    if os.path.exists(out_path):
-                        with open(out_path, "rb") as f:
-                            return f.read()
-                except Exception:
-                    pass
-    except Exception:
-        pass
-    return None
-
-def collect_leftover_tokens(doc: Document) -> set[str]:
-    leftovers = set()
-    for item in iter_block_items(doc):
-        if isinstance(item, Paragraph):
-            text = "".join(r.text for r in item.runs) if item.runs else item.text
-            for m in LEFTOVER_RE.findall(text or ""):
-                leftovers.add(m)
-    for section in doc.sections:
-        for container in (section.header, section.footer):
-            for item in iter_block_items(container):
-                if isinstance(item, Paragraph):
-                    text = "".join(r.text for r in item.runs) if item.runs else item.text
-                    for m in LEFTOVER_RE.findall(text or ""):
-                        leftovers.add(m)
-    return leftovers
+from document_processing import (
+    DEFAULT_OUT,
+    TARGET_SHEET,
+    DocumentResult,
+    ensure_docx,
+    ensure_pdf,
+    extract_template_tokens,
+    generate_documents,
+    get_sheet_names,
+)
 
 # ---------- UI ----------
 st.set_page_config(page_title="납입요청서 자동 생성", page_icon="🧾", layout="wide")
 
 # Glassmorphism + 브랜드 컬러
-st.markdown("""
+st.markdown(
+    """
 <style>
 /* 공통 Glassmorphism 토큰 */
 :root{
@@ -240,11 +48,7 @@ st.markdown("""
 .word-upload { --brand:#185ABD; }   /* MS Word blue  */
 
 /* 업로더 드롭존 자체를 정확히 타겟팅 */
-.upload-wrap [data-testid="stFileUploaderDropzone"]{
-  background: var(--glass-bg) !important;
-  border: 1px solid color-mix(in srgb, var(--brand) 45%, #ffffff 0%) !important;
-  border-radius: 12px !important;
-  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+@@ -248,160 +56,165 @@ st.markdown("""
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
 }
 
@@ -270,49 +74,64 @@ st.markdown("""
 }
 
 /* 파일 확장자·용량 캡션 가독성 */
-.upload-wrap [data-testid="stFileUploader"] small, 
-.upload-wrap [data-testid="stFileUploader"] p, 
+.upload-wrap [data-testid="stFileUploader"] small,
+.upload-wrap [data-testid="stFileUploader"] p,
 .upload-wrap [data-testid="stFileUploader"] span{
   color: rgba(226,232,240,.9) !important;
 }
 
 /* (스트림릿 버전 호환용) 베이스웹 드롭존에도 적용 */
-.upload-wrap [data-baseweb="dropzone"]{
+.upload-wrap [data-testid="stFileUploader"] [data-baseweb="dropzone"]{
   background: var(--glass-bg) !important;
   border: 1px solid color-mix(in srgb, var(--brand) 45%, #ffffff 0%) !important;
   border-radius: 12px !important;
 }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
 
 col_left, col_right = st.columns([1.2, 1])
+
 with col_left:
     with st.form("input_form", clear_on_submit=False):
-    # 엑셀 업로더 (초록)
-    st.markdown('<div class="upload-wrap excel-upload">', unsafe_allow_html=True)
-    xlsx_file = st.file_uploader("엑셀 파일", type=["xlsx", "xlsm"], accept_multiple_files=False, key="xlsx_up")
-    st.markdown('</div>', unsafe_allow_html=True)
+        # 엑셀 업로더 (초록)
+        st.markdown('<div class="upload-wrap excel-upload">', unsafe_allow_html=True)
+        xlsx_file = st.file_uploader(
+            "엑셀 파일",
+            type=["xlsx", "xlsm"],
+            accept_multiple_files=False,
+            key="xlsx_up",
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    # 워드 업로더 (파랑)
-    st.markdown('<div class="upload-wrap word-upload">', unsafe_allow_html=True)
-    docx_tpl = st.file_uploader("워드 템플릿(.docx)", type=["docx"], accept_multiple_files=False, key="docx_up")
-    st.markdown('</div>', unsafe_allow_html=True)
+        # 워드 업로더 (파랑)
+        st.markdown('<div class="upload-wrap word-upload">', unsafe_allow_html=True)
+        docx_tpl = st.file_uploader(
+            "워드 템플릿(.docx)",
+            type=["docx"],
+            accept_multiple_files=False,
+            key="docx_up",
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
-    # ... (시트 선택 등 기존 로직 계속)
-    submitted = st.form_submit_button("문서 생성", use_container_width=True)
-
+        out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
 
         sheet_choice = None
         if xlsx_file is not None:
             try:
-                wb_tmp = load_workbook(filename=io.BytesIO(xlsx_file.getvalue()), data_only=True)
+                sheet_names = get_sheet_names(xlsx_file.getvalue())
+                default_index = (
+                    sheet_names.index(TARGET_SHEET)
+                    if TARGET_SHEET in sheet_names
+                    else 0
+                )
                 sheet_choice = st.selectbox(
                     "사용할 시트",
-                    wb_tmp.sheetnames,
-                    index=wb_tmp.sheetnames.index(TARGET_SHEET) if TARGET_SHEET in wb_tmp.sheetnames else 0
+                    sheet_names,
+                    index=default_index,
                 )
             except Exception:
                 st.warning("엑셀 미리보기 중 문제가 발생했습니다. 생성 시도는 가능합니다.")
@@ -326,19 +145,16 @@ with col_right:
         "- 생성 시 WORD와 PDF 각각 다운로드 + ZIP 제공\n"
         "- PDF 변환은 MS Word(docx2pdf) 또는 LibreOffice(soffice) 필요"
     )
-    if 'word_up' in st.session_state and st.session_state['word_up'] is not None:
+
+    if docx_tpl is not None:
         try:
-            doc_preview = Document(io.BytesIO(st.session_state['word_up'].getvalue()))
-            sample_tokens = set()
-            for p in doc_preview.paragraphs[:80]:
-                for m in re.findall(r"\{\{[^}]+\}\}", p.text or ""):
-                    if len(sample_tokens) < 12:
-                        sample_tokens.add(m)
+            sample_tokens = extract_template_tokens(docx_tpl.getvalue())
             st.markdown("**템플릿 토큰 샘플**" if sample_tokens else "템플릿에서 토큰을 찾지 못했습니다.")
             if sample_tokens:
-                st.code(", ".join(list(sample_tokens)))
+                st.code(", ".join(sample_tokens))
         except Exception:
             st.caption("템플릿 미리보기를 불러오지 못했습니다.")
+
 
 # ---------- 생성 실행 ----------
 if submitted:
@@ -349,37 +165,30 @@ if submitted:
     with st.status("문서 생성 중...", expanded=True) as status:
         try:
             st.write("1) 엑셀 로드")
-            wb = load_workbook(filename=io.BytesIO(xlsx_file.read()), data_only=True)
-            ws = wb[sheet_choice] if sheet_choice else (
-                wb[TARGET_SHEET] if TARGET_SHEET in wb.sheetnames else wb[wb.sheetnames[0]]
-            )
+            xlsx_bytes = xlsx_file.getvalue()
 
             st.write("2) 템플릿 로드")
-            tpl_bytes = docx_tpl.read()
-            doc = Document(io.BytesIO(tpl_bytes))
+            tpl_bytes = docx_tpl.getvalue()
 
-            st.write("3) 치환 실행")
-            replacer = make_replacer(ws)
-            replace_everywhere(doc, replacer)
+            st.write("3) 문서 생성")
+            result: DocumentResult = generate_documents(
+                xlsx_bytes,
+                tpl_bytes,
+                sheet_choice,
+                target_sheet=TARGET_SHEET,
+            )
 
-            st.write("4) WORD 저장")
-            docx_buf = io.BytesIO()
-            doc.save(docx_buf)
-            docx_buf.seek(0)
-            docx_bytes = docx_buf.getvalue()
+            docx_bytes = result.docx_bytes
+            pdf_bytes = result.pdf_bytes
+            leftovers = result.leftovers
 
-            st.write("5) PDF 변환 시도")
-            pdf_bytes = convert_docx_to_pdf_bytes(docx_bytes)
+            st.write("4) WORD/PDF 준비 완료")
             pdf_ok = pdf_bytes is not None
 
-            st.write("6) 남은 토큰 확인")
-            doc_after = Document(io.BytesIO(docx_bytes))
-            leftovers = sorted(list(collect_leftover_tokens(doc_after)))
-
             status.update(label="완료", state="complete", expanded=False)
-        except Exception as e:
+        except Exception as exc:  # pragma: no cover - UI feedback
             status.update(label="오류", state="error", expanded=True)
-            st.exception(e)
+            st.exception(exc)
             st.stop()
 
     st.success("문서가 준비되었습니다.")
@@ -405,20 +214,3 @@ if submitted:
     with dl_cols[2]:
         zip_buf = io.BytesIO()
         with ZipFile(zip_buf, "w", ZIP_DEFLATED) as zf:
-            zf.writestr(ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT, docx_bytes)
-            if pdf_ok:
-                zf.writestr(ensure_pdf(out_name), pdf_bytes)
-        zip_buf.seek(0)
-        st.download_button(
-            "📦 ZIP (WORD+PDF)",
-            data=zip_buf,
-            file_name=(ensure_pdf(out_name).replace(".pdf", "") + "_both.zip"),
-            mime="application/zip",
-            use_container_width=True,
-        )
-
-    if leftovers:
-        with st.expander("템플릿에 남아있는 토큰"):
-            st.write(", ".join(leftovers))
-    else:
-        st.caption("모든 토큰이 치환되었습니다.")
