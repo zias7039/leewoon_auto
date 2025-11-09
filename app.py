@@ -216,98 +216,72 @@ st.set_page_config(page_title="납입요청서 자동 생성", page_icon="🧾",
 # Glassmorphism + 브랜드 컬러
 st.markdown("""
 <style>
+/* 공통 Glassmorphism 토큰 */
 :root{
-  --glass-bg: rgba(17, 24, 39, .35);
-  --glass-brd: rgba(255,255,255,.18);
-  --glass-shadow: 0 12px 40px rgba(0,0,0,.35);
-  --excel: #217346;    /* Excel signature */
-  --excel-ink: #D1FAE5;
-  --word:  #185ABD;    /* Word signature */
-  --word-ink: #DBEAFE;
+  --glass-bg: rgba(15, 23, 42, .35);         /* 유리 배경 */
+  --glass-bd: rgba(148, 163, 184, .35);      /* 테두리 */
+  --glass-shadow: 0 8px 32px rgba(0,0,0,.35);
 }
 
-.excel-upload[data-testid="stFileUploader"] > div:first-child {
-  background: rgba(33,115,70,0.18) !important;
-  border: 1px solid rgba(33,115,70,0.45) !important;
-  backdrop-filter: blur(16px);
-  border-radius: 14px !important;
-}
-
-.word-upload[data-testid="stFileUploader"] > div:first-child {
-  background: rgba(24,90,189,0.18) !important;
-  border: 1px solid rgba(24,90,189,0.45) !important;
-  backdrop-filter: blur(16px);
-  border-radius: 14px !important;
-}
-
-/* 전체 배경과 컨테이너 */
-.block-container{padding-top:1rem;}
-#MainMenu, footer{visibility:hidden;}
-
-/* 카드(유리) 공통 */
-.glass{
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-brd);
+/* 래퍼 공통 카드 느낌 */
+.upload-wrap{
   border-radius: 16px;
-  box-shadow: var(--glass-shadow);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
-/* 우측 안내 패널 */
-div[data-testid="column"]:last-child > div{
-  padding:16px 16px 8px 16px;
-}
-
-/* 폼 자체를 유리카드로 */
-div[data-testid="stForm"]{
-  padding: 16px 16px 6px 16px;
-  border-radius: 16px;
-}
-div[data-testid="stForm"].glass{}
-
-/* 업로더 공통(유리) */
-.glass-uploader [data-testid="stFileUploaderDropzone"]{
+  padding: 12px;
+  margin: 8px 0 18px 0;
+  position: relative;
   background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-  border-radius: 14px;
-  border: 1px solid var(--glass-brd);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-}
-.glass-uploader [data-testid="stFileUploader"] section{gap:6px;}
-.glass-uploader [data-testid="stFileUploader"] button{border-radius:10px}
-
-/* --- 업로더 컬러링: 폼 안의 1번째=엑셀, 2번째=워드 --- */
-div[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(1) [data-testid="stFileUploaderDropzone"]{
-  border: 1px solid color-mix(in srgb, var(--excel) 55%, white);
-  box-shadow: 0 10px 28px color-mix(in srgb, var(--excel) 32%, transparent);
-}
-div[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(1) [data-testid="stFileUploaderDropzone"] *{
-  color: var(--excel-ink);
-}
-div[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(1) button{
-  background: color-mix(in srgb, var(--excel) 50%, black);
-  border: 1px solid color-mix(in srgb, var(--excel) 65%, white);
+  border: 1px solid var(--glass-bd);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(10px);
 }
 
-/* 워드 업로더 */
-div[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) [data-testid="stFileUploaderDropzone"]{
-  border: 1px solid color-mix(in srgb, var(--word) 55%, white);
-  box-shadow: 0 10px 28px color-mix(in srgb, var(--word) 32%, transparent);
-}
-div[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) [data-testid="stFileUploaderDropzone"] *{
-  color: var(--word-ink);
-}
-div[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) button{
-  background: color-mix(in srgb, var(--word) 50%, black);
-  border: 1px solid color-mix(in srgb, var(--word) 65%, white);
+/* 시그니처 컬러 변수 */
+.excel-upload{ --brand:#107C41; }   /* MS Excel green */
+.word-upload { --brand:#185ABD; }   /* MS Word blue  */
+
+/* 업로더 드롭존 자체를 정확히 타겟팅 */
+.upload-wrap [data-testid="stFileUploaderDropzone"]{
+  background: var(--glass-bg) !important;
+  border: 1px solid color-mix(in srgb, var(--brand) 45%, #ffffff 0%) !important;
+  border-radius: 12px !important;
+  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
 }
 
-/* 상태창/버튼도 유리느낌 보정 */
-.stButton>button{height:44px; border-radius:10px}
-[data-testid="stStatusWidget"]{border-radius:14px; backdrop-filter: blur(10px);}
-[data-testid="stDownloadButton"] > button{min-width:220px; border-radius:10px}
-.small-note{font-size:.85rem; opacity:.8}
+/* 호버/포커스 */
+.upload-wrap [data-testid="stFileUploaderDropzone"]:hover{
+  border-color: color-mix(in srgb, var(--brand) 70%, #ffffff 0%) !important;
+  background: rgba(15,23,42,.42) !important;
+}
+
+/* 내부 텍스트/아이콘 컬러 */
+.upload-wrap [data-testid="stFileUploader"] *{
+  color: color-mix(in srgb, var(--brand) 80%, #e5e7eb 20%) !important;
+}
+
+/* Browse 버튼 */
+.upload-wrap [data-testid="stFileUploader"] button{
+  border-radius: 10px !important;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--brand) 85%, #ffffff 0%), color-mix(in srgb, var(--brand) 65%, #000000 0%)) !important;
+  border: 1px solid color-mix(in srgb, var(--brand) 90%, #000 10%) !important;
+}
+.upload-wrap [data-testid="stFileUploader"] button:hover{
+  filter: brightness(1.05);
+}
+
+/* 파일 확장자·용량 캡션 가독성 */
+.upload-wrap [data-testid="stFileUploader"] small, 
+.upload-wrap [data-testid="stFileUploader"] p, 
+.upload-wrap [data-testid="stFileUploader"] span{
+  color: rgba(226,232,240,.9) !important;
+}
+
+/* (스트림릿 버전 호환용) 베이스웹 드롭존에도 적용 */
+.upload-wrap [data-baseweb="dropzone"]{
+  background: var(--glass-bg) !important;
+  border: 1px solid color-mix(in srgb, var(--brand) 45%, #ffffff 0%) !important;
+  border-radius: 12px !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
