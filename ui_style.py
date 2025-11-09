@@ -21,12 +21,12 @@ footer {visibility: hidden;}
     font-weight: 500;
     transition: all 0.2s ease;
 }
-
 .stButton>button:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
+/* 다운로드 버튼 */
 [data-testid="stDownloadButton"] > button {
     min-width: 220px;
 }
@@ -45,38 +45,28 @@ input[type="text"] {
     border: 1px solid rgba(203,213,225,0.8) !important;
     padding: 10px 12px !important;
 }
-
 input[type="text"]:focus {
     border-color: rgba(59,130,246,0.5) !important;
     box-shadow: 0 0 0 3px rgba(59,130,246,0.1) !important;
 }
 
-/* 기본 업로더 스타일 */
+/* 기본 업로더 공통 스타일 */
 [data-testid="stFileUploaderDropzone"] {
-    background: rgba(248,250,252,0.6) !important;
     border: 2px dashed rgba(203,213,225,0.6) !important;
     border-radius: 12px !important;
     padding: 32px 24px !important;
     transition: all 0.3s ease !important;
     min-height: 140px !important;
 }
-
 [data-testid="stFileUploaderDropzone"]:hover {
     border-color: rgba(148,163,184,0.8) !important;
     background: rgba(241,245,249,0.8) !important;
     transform: translateY(-2px) !important;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
 }
 
-[data-testid="stFileUploader"] button {
-    border-radius: 8px !important;
-    padding: 8px 20px !important;
-    font-weight: 500 !important;
-}
-
-/* ========================= */
-/*  Excel 업로더 (초록)     */
-/* ========================= */
+/* ==================================================================== */
+/*  Excel 업로더 (첫 번째 업로더)  - 클래스 기반 (진짜 확실하게 적용)   */
+/* ==================================================================== */
 .excel-uploader [data-testid="stFileUploaderDropzone"] {
     border: 2px dashed rgba(33,115,70,0.6) !important;
     background: linear-gradient(135deg, rgba(33,115,70,0.08), rgba(33,115,70,0.15)) !important;
@@ -87,26 +77,24 @@ input[type="text"]:focus {
     box-shadow: 0 6px 24px rgba(33,115,70,0.25) !important;
 }
 .excel-uploader [data-testid="stFileUploaderDropzone"] p,
-.excel-uploader [data-testid="stFileUploaderDropzone"] span {
+.excel-uploader [data-testid="stFileUploaderDropzone"] span,
+.excel-uploader [data-testid="stFileUploaderDropzone"] small {
     color: rgba(33,115,70,1) !important;
     font-weight: 600 !important;
-}
-.excel-uploader [data-testid="stFileUploaderDropzone"] small {
-    color: rgba(33,115,70,0.75) !important;
 }
 .excel-uploader button {
     background: linear-gradient(135deg, #217346, #1a5c38) !important;
     border: 1px solid rgba(33,115,70,0.8) !important;
-    color: white !important;
+    color: #fff !important;
 }
 .excel-uploader button:hover {
     background: linear-gradient(135deg, #25824f, #1e6841) !important;
     box-shadow: 0 4px 16px rgba(33,115,70,0.35) !important;
 }
 
-/* ========================= */
-/*  Word 업로더 (파랑)      */
-/* ========================= */
+/* ==================================================================== */
+/*  Word 업로더 (두 번째 업로더)  - 클래스 기반                         */
+/* ==================================================================== */
 .word-uploader [data-testid="stFileUploaderDropzone"] {
     border: 2px dashed rgba(24,90,189,0.6) !important;
     background: linear-gradient(135deg, rgba(24,90,189,0.08), rgba(24,90,189,0.15)) !important;
@@ -117,28 +105,40 @@ input[type="text"]:focus {
     box-shadow: 0 6px 24px rgba(24,90,189,0.25) !important;
 }
 .word-uploader [data-testid="stFileUploaderDropzone"] p,
-.word-uploader [data-testid="stFileUploaderDropzone"] span {
+.word-uploader [data-testid="stFileUploaderDropzone"] span,
+.word-uploader [data-testid="stFileUploaderDropzone"] small {
     color: rgba(24,90,189,1) !important;
     font-weight: 600 !important;
-}
-.word-uploader [data-testid="stFileUploaderDropzone"] small {
-    color: rgba(24,90,189,0.75) !important;
 }
 .word-uploader button {
     background: linear-gradient(135deg, #185ABD, #1349a0) !important;
     border: 1px solid rgba(24,90,189,0.8) !important;
-    color: white !important;
+    color: #fff !important;
 }
 .word-uploader button:hover {
     background: linear-gradient(135deg, #1c66d1, #1552b3) !important;
     box-shadow: 0 4px 16px rgba(24,90,189,0.35) !important;
+}
+
+/* ==================================================================== */
+/* 다크모드 전용 오버라이드 — 색 보존                                   */
+/* ==================================================================== */
+@media (prefers-color-scheme: dark) {
+    .excel-uploader [data-testid="stFileUploaderDropzone"] {
+        background: linear-gradient(135deg, rgba(33,115,70,0.14), rgba(33,115,70,0.24)) !important;
+        border-color: rgba(33,115,70,0.65) !important;
+    }
+    .word-uploader [data-testid="stFileUploaderDropzone"] {
+        background: linear-gradient(135deg, rgba(24,90,189,0.14), rgba(24,90,189,0.24)) !important;
+        border-color: rgba(24,90,189,0.65) !important;
+    }
 }
 """
 
 def inject():
     st.markdown(f"<style>{BASE_CSS}</style>", unsafe_allow_html=True)
 
-    # 업로더에 클래스 자동 적용
+    # 업로더에 클래스 부착 (가장 중요)
     st.markdown("""
     <script>
     setTimeout(function() {
