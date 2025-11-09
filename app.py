@@ -14,6 +14,9 @@ from docx import Document
 from docx.table import _Cell
 from docx.text.paragraph import Paragraph
 
+# 새로 추가: 스타일 모듈
+from ui_style import inject as inject_style, open_div, close_div, h4
+
 # 선택: docx2pdf가 있으면 활용
 try:
     from docx2pdf import convert as docx2pdf_convert
@@ -80,17 +83,9 @@ def value_to_text(v) -> str:
 
 # ----------------- 포맷 적용 -----------------
 def apply_inline_format(value, fmt: str | None) -> str:
-    """
-    {{A1|#,###}}, {{B7|YYYY.MM.DD}} 형태의 포맷을 간단 지원.
-    - 날짜 포맷: YYYY -> %Y, MM -> %m, DD -> %d
-    - 숫자 포맷: '#,###' / '#,###.00' 식 → 그룹핑 + 소수 자릿수
-    """
     if fmt is None or fmt.strip() == "":
         return value_to_text(value)
-
-    # 날짜 포맷 감지
     if any(tok in fmt for tok in ("YYYY", "MM", "DD")):
-        # 값이 문자열이어도 'YYYY-MM-DD'면 날짜로 파싱
         if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip()):
             value = datetime.strptime(value.strip(), "%Y-%m-%d").date()
         if isinstance(value, (datetime, date)):
@@ -98,26 +93,19 @@ def apply_inline_format(value, fmt: str | None) -> str:
             f = f.replace("YYYY", "%Y").replace("MM", "%m").replace("DD", "%d")
             return value.strftime(f)
         return value_to_text(value)
-
-    # 숫자 포맷 간이 처리
     if re.fullmatch(r"[#,0]+(?:\.[0#]+)?", fmt.replace(",", "")):
         try:
             num = float(str(value).replace(",", ""))
-            # 소수점 자릿수 계산
             decimals = 0
             if "." in fmt:
                 decimals = len(fmt.split(".")[1])
             return f"{num:,.{decimals}f}"
         except Exception:
             return value_to_text(value)
-
-    # 그 외는 기본 변환
     return value_to_text(value)
 
 # ----------------- 문서 순회/치환 -----------------
 def iter_block_items(parent):
-    """문서의 문단/표 셀 모두 순회 (본문, 헤더/푸터 공통 사용)."""
-    # python-docx 타입 체크 대신 duck-typing으로 안전 처리
     if hasattr(parent, "paragraphs") and hasattr(parent, "tables"):
         for p in parent.paragraphs:
             yield p
@@ -174,8 +162,6 @@ def make_replacer(ws):
                 v = None
             return apply_inline_format(v, fmt)
         replaced = TOKEN_RE.sub(sub, text)
-
-        # YYYY/MM/DD 같은 더미 템플릿 치환(간단)
         sp = "    "
         today = datetime.today()
         today_str = f"{today.year}년{sp}{today.month}월{sp}{today.day}일"
@@ -192,8 +178,6 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> bytes | None:
             out_path = os.path.join(td, "doc.pdf")
             with open(in_path, "wb") as f:
                 f.write(docx_bytes)
-
-            # 1) Word (Windows) 경로
             if docx2pdf_convert is not None:
                 try:
                     docx2pdf_convert(in_path, out_path)
@@ -202,8 +186,6 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> bytes | None:
                             return f.read()
                 except Exception:
                     pass
-
-            # 2) LibreOffice headless
             if has_soffice():
                 try:
                     subprocess.run(
@@ -225,14 +207,14 @@ def collect_leftover_tokens(doc: Document) -> set[str]:
     for item in iter_block_items(doc):
         if isinstance(item, Paragraph):
             text = "".join(r.text for r in item.runs) if item.runs else item.text
-            for m in LEFTOVER_RE.findall(text or ""):
+            for m in re.findall(r"\{\{[^}]+\}\}", text or ""):
                 leftovers.add(m)
     for section in doc.sections:
         for container in (section.header, section.footer):
             for item in iter_block_items(container):
                 if isinstance(item, Paragraph):
                     text = "".join(r.text for r in item.runs) if item.runs else item.text
-                    for m in LEFTOVER_RE.findall(text or ""):
+                    for m in re.findall(r"\{\{[^}]+\}\}", text or ""):
                         leftovers.add(m)
     return leftovers
 
@@ -243,36 +225,27 @@ st.set_page_config(
     layout="wide",
 )
 
-# 최소 CSS 다듬기
-st.markdown("""
-<style>
-/* 상단 햄버거/푸터 숨김 */
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-/* 카드 느낌의 컨테이너 */
-.block-container {padding-top: 1.2rem;}
-div[data-testid="stForm"] {border: 1px solid rgba(0,0,0,.08); padding: 1rem 1rem 0.5rem 1rem; border-radius: 12px;}
-/* 버튼 약간 크게 */
-.stButton>button {height: 44px; border-radius: 10px;}
-/* 다운로드 버튼 너비 고정 */
-[data-testid="stDownloadButton"] > button {min-width: 220px;}
-/* 작은 캡션 */
-.small-note {font-size:.85rem; color: rgba(0,0,0,.6);}
-</style>
-""", unsafe_allow_html=True)
+# ✅ 스타일 모듈 주입 (이 한 줄로 전역 CSS 적용)
+inject_style(st, glass=True)
 
 st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
 
 col_left, col_right = st.columns([1.2, 1])
-with col_left:
-    with st.form("input_form", clear_on_submit=False):
-        xlsx_file = st.file_uploader("엑셀 파일", type=["xlsx", "xlsm"], accept_multiple_files=False)
-        docx_tpl = st.file_uploader("워드 템플릿(.docx)", type=["docx"], accept_multiple_files=False)
 
-        # 출력 파일명
+with col_left:
+    # 폼에 card 스타일 부여
+    with st.form("input_form", clear_on_submit=False):
+        # 업로더마다 전용 색상 박스 래핑
+        open_div(st, "card upload-tight excel-upload")
+        xlsx_file = st.file_uploader("엑셀 파일", type=["xlsx", "xlsm"], accept_multiple_files=False)
+        close_div(st)
+
+        open_div(st, "card upload-tight word-upload")
+        docx_tpl = st.file_uploader("워드 템플릿(.docx)", type=["docx"], accept_multiple_files=False)
+        close_div(st)
+
         out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
 
-        # 업로드되면 시트 이름 미리 읽어 선택
         sheet_choice = None
         if xlsx_file is not None:
             try:
@@ -282,29 +255,28 @@ with col_left:
                     wb_tmp.sheetnames,
                     index=wb_tmp.sheetnames.index(TARGET_SHEET) if TARGET_SHEET in wb_tmp.sheetnames else 0
                 )
-            except Exception as e:
+            except Exception:
                 st.warning("엑셀 미리보기 중 문제가 발생했습니다. 생성 시도는 가능합니다.")
 
         submitted = st.form_submit_button("문서 생성", use_container_width=True)
 
 with col_right:
-    st.markdown("#### 안내")
+    h4(st, "안내")
     st.markdown(
         "- **{{A1}} / {{B7|YYYY.MM.DD}} / {{C3|#,###.00}}** 형식의 인라인 포맷을 지원합니다.\n"
         "- **문서 생성**을 누르면 WORD와 PDF를 만들어 **개별 다운로드**와 **ZIP 묶음**을 제공합니다.\n"
         "- PDF 변환은 **MS Word(docx2pdf)** 또는 **LibreOffice(soffice)** 가 설치된 환경에서 동작합니다.",
     )
-    # 템플릿 토큰 간단 미리보기(있을 때만)
-    if docx_tpl is not None:
+    if 'docx_tpl' in locals() and docx_tpl is not None:
         try:
             doc_preview = Document(io.BytesIO(docx_tpl.getvalue()))
             sample_tokens = set()
-            for i, p in enumerate(doc_preview.paragraphs[:80]):  # 처음 80문단만 가볍게 스캔
+            for p in doc_preview.paragraphs[:80]:
                 for m in re.findall(r"\{\{[^}]+\}\}", p.text or ""):
                     if len(sample_tokens) < 12:
                         sample_tokens.add(m)
             if sample_tokens:
-                st.markdown("**템플릿 토큰 샘플**")
+                st.markdown('<div class="token-sample">**템플릿 토큰 샘플**</div>', unsafe_allow_html=True)
                 st.code(", ".join(list(sample_tokens)))
             else:
                 st.caption("템플릿에서 토큰을 찾지 못했습니다.")
@@ -317,7 +289,6 @@ if submitted:
         st.error("엑셀과 템플릿을 모두 업로드하세요.")
         st.stop()
 
-    # 진행 상태 카드
     with st.status("문서 생성 중...", expanded=True) as status:
         try:
             st.write("1) 엑셀 로드")
@@ -344,7 +315,6 @@ if submitted:
             pdf_bytes = convert_docx_to_pdf_bytes(docx_bytes)
             pdf_ok = pdf_bytes is not None
 
-            # 남은 토큰 조사
             st.write("6) 남은 토큰 확인")
             doc_after = Document(io.BytesIO(docx_bytes))
             leftovers = sorted(list(collect_leftover_tokens(doc_after)))
@@ -355,10 +325,8 @@ if submitted:
             st.exception(e)
             st.stop()
 
-    # ===== 결과 영역 =====
     st.success("문서가 준비되었습니다.")
 
-    # 개별 다운로드 버튼 (Word / PDF)
     dl_cols = st.columns(3)
     with dl_cols[0]:
         st.download_button(
@@ -378,8 +346,6 @@ if submitted:
             help=None if pdf_ok else "PDF 변환 엔진(Word 또는 LibreOffice)이 없는 환경입니다.",
             use_container_width=True,
         )
-
-    # ZIP 묶음
     with dl_cols[2]:
         zip_buf = io.BytesIO()
         with ZipFile(zip_buf, "w", ZIP_DEFLATED) as zf:
@@ -395,7 +361,6 @@ if submitted:
             use_container_width=True,
         )
 
-    # 남은 토큰 보고(있을 때만)
     if leftovers:
         with st.expander("템플릿에 남아있는 토큰"):
             st.write(", ".join(leftovers))
