@@ -14,7 +14,7 @@ from docx import Document
 from docx.table import _Cell
 from docx.text.paragraph import Paragraph
 
-# 선택: docx2pdf가 있으면 활용
+# 선택: docx2pdf가 있으면 활용(Windows+Word 환경에서만 동작)
 try:
     from docx2pdf import convert as docx2pdf_convert
 except Exception:
@@ -80,7 +80,9 @@ def value_to_text(v) -> str:
 
 # ----------------- 포맷 적용 -----------------
 def apply_inline_format(value, fmt: str | None) -> str:
-    # {{A1|#,###}}, {{B7|YYYY.MM.DD}}
+    """
+    {{A1|#,###}}, {{B7|YYYY.MM.DD}} 지원
+    """
     if fmt is None or fmt.strip() == "":
         return value_to_text(value)
 
@@ -97,7 +99,9 @@ def apply_inline_format(value, fmt: str | None) -> str:
     if re.fullmatch(r"[#,0]+(?:\.[0#]+)?", fmt.replace(",", "")):
         try:
             num = float(str(value).replace(",", ""))
-            decimals = len(fmt.split(".")[1]) if "." in fmt else 0
+            decimals = 0
+            if "." in fmt:
+                decimals = len(fmt.split(".")[1])
             return f"{num:,.{decimals}f}"
         except Exception:
             return value_to_text(value)
@@ -106,7 +110,7 @@ def apply_inline_format(value, fmt: str | None) -> str:
 
 # ----------------- 문서 순회/치환 -----------------
 def iter_block_items(parent):
-    # 문단/표 셀 모두 순회 (duck-typing)
+    """문서의 문단/표 셀 모두 순회 (본문, 헤더/푸터 공통 사용)."""
     if hasattr(parent, "paragraphs") and hasattr(parent, "tables"):
         for p in parent.paragraphs:
             yield p
@@ -164,7 +168,7 @@ def make_replacer(ws):
             return apply_inline_format(v, fmt)
         replaced = TOKEN_RE.sub(sub, text)
 
-        # 더미 'YYYY년 MM월 DD일' 치환
+        # YYYY/MM/DD 같은 더미 템플릿 치환(간단)
         sp = "    "
         today = datetime.today()
         today_str = f"{today.year}년{sp}{today.month}월{sp}{today.day}일"
@@ -182,7 +186,7 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> bytes | None:
             with open(in_path, "wb") as f:
                 f.write(docx_bytes)
 
-            # 1) MS Word 경로
+            # 1) Word(docx2pdf)
             if docx2pdf_convert is not None:
                 try:
                     docx2pdf_convert(in_path, out_path)
@@ -226,354 +230,198 @@ def collect_leftover_tokens(doc: Document) -> set[str]:
     return leftovers
 
 # ----------------- UI 스타일 -----------------
-def inject_css():
-    st.markdown(
-        """
+st.set_page_config(page_title="Document Generator", page_icon="🧩", layout="wide")
+
+st.markdown("""
 <style>
-/* 전체 배경과 기본 글꼴 */
-html, body, [data-testid="stAppViewContainer"] {
-  background: radial-gradient(1200px 700px at 20% -10%, #111827 10%, #0b1220 60%, #0b0f19 100%) fixed;
-  color: #e5e7eb;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji";
+/* 배경 그라데이션 */
+.stApp {
+  background: radial-gradient(1200px 600px at 10% 0%, rgba(34,211,238,.06), rgba(0,0,0,0)) ,
+              radial-gradient(1200px 600px at 90% 20%, rgba(59,130,246,.06), rgba(0,0,0,0)) ,
+              #0b1220;
 }
 
-/* 사이드바 */
-[data-testid="stSidebar"] {
-  background: rgba(15,23,42,.65);
-  backdrop-filter: blur(10px);
-  border-right: 1px solid rgba(148,163,184,.25);
+/* 타이틀 */
+.h1-title {
+  font-size: 36px; font-weight: 800; color: #fff; letter-spacing: .02em;
+  text-shadow: 0 1px 0 rgba(255,255,255,.05);
 }
-.sidebar-chip{
-  display:flex;align-items:center;gap:.6rem;
-  padding:.6rem .9rem;border-radius:.7rem;
-  color:#94a3b8;border-left:4px solid transparent;
-}
-.sidebar-chip.active{background:rgba(6,182,212,.12); color:#67e8f9; border-left-color:#06b6d4;}
-.sidebar-chip:hover{background:rgba(51,65,85,.35); color:#cbd5e1}
-
-/* 헤더 */
-.header{
-  background: rgba(15,23,42,.4);
-  border-bottom:1px solid rgba(148,163,184,.25);
-  backdrop-filter: blur(10px);
-  padding: 14px 24px;
-}
+.h1-sub { color:#94a3b8; margin-top:6px }
 
 /* 카드 */
-.card{
-  position:relative;
-  background: rgba(30,41,59,.55);
-  border:1px solid rgba(148,163,184,.25);
-  border-radius: 16px;
-  padding: 24px;
-  transition: border-color .25s ease, transform .25s ease, box-shadow .25s ease;
+.dg-card {
+  position: relative; border: 1px solid rgba(148,163,184,.25);
+  background: rgba(15,23,42,.55); border-radius: 16px; padding: 24px;
+  backdrop-filter: blur(6px);
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
 }
-.card:hover{
-  border-color: rgba(34,211,238,.45);
-  box-shadow: 0 10px 40px rgba(34,211,238,.15);
-  transform: translateY(-2px);
+.dg-card:hover { border-color: rgba(34,211,238,.45); box-shadow: 0 8px 30px rgba(34,211,238,.08); }
+
+/* 카드 아이콘 원형 */
+.icon-bubble {
+  width: 80px; height: 80px; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(148,163,184,.15);
+  margin: 8px auto 18px auto;
 }
 
 /* 버튼 */
-.btn{
-  display:inline-flex; align-items:center; justify-content:center;
-  padding: .8rem 1.2rem; gap:.5rem;
-  font-weight:700; border-radius: 12px;
-  border: 2px solid rgba(6,182,212,.9);
-  color:#67e8f9; background: transparent;
-}
-.btn:hover{ background: rgba(6,182,212,.12); }
-
-/* 큰 버튼 */
-.btn-primary{
-  width:100%; padding: 1.1rem 1.4rem; font-size:1.05rem;
-  border: none; color:white;
+.dg-btn-primary {
   background: linear-gradient(90deg, #06b6d4, #3b82f6);
-  box-shadow: 0 10px 40px rgba(34,211,238,.25);
+  color:#fff; border:0; padding: 12px 18px; border-radius: 12px;
+  font-weight: 700; letter-spacing:.02em;
 }
-.btn-primary:disabled{ background:#374151; color:#6b7280; box-shadow:none; }
+.dg-btn-primary:hover { filter: brightness(1.06); box-shadow: 0 6px 22px rgba(56,189,248,.35); }
 
-/* 진행바 박스 */
-.progress{
-  background: rgba(31,41,55,.7);
-  border:1px solid rgba(148,163,184,.25);
-  border-radius: 12px; padding: 12px 14px;
+.dg-btn-outline {
+  background: transparent; color:#22d3ee;
+  border: 2px solid rgba(34,211,238,.6);
+  padding: 10px 16px; border-radius: 10px; font-weight:600;
 }
-.progress-track{ width:100%; height:10px; background:#374151; border-radius: 999px; overflow:hidden; }
-.progress-bar{ height:100%; background: linear-gradient(90deg,#06b6d4,#3b82f6); transition: width .3s ease; }
+.dg-btn-outline:hover{ background: rgba(34,211,238,.08); }
 
-/* 상태칩 */
-.kb{ display:flex; align-items:center; gap:.5rem; color:#9ca3af; }
-.badge{ display:inline-flex; align-items:center; gap:.35rem; padding:.25rem .5rem; border-radius:999px; font-size:.8rem; }
-.badge.ok{ background:rgba(34,197,94,.15); color:#4ade80; }
-.badge.wait{ background:rgba(234,179,8,.15); color:#facc15; }
-.badge.err{ background:rgba(239,68,68,.15); color:#f87171; }
+/* 입력창 */
+.dg-input input {
+  background: rgba(2,6,23,.5); border:1px solid rgba(148,163,184,.35);
+  color:#e5e7eb; border-radius: 12px; padding: 12px 14px;
+}
+.dg-input input:focus{ border-color:#22d3ee; box-shadow:none; }
 
-/* 업로더 오버레이 클릭 영역 감추기 */
-.block-container { padding-top: 0rem; }
+/* 진행바 */
+.progress-wrap{ background: rgba(100,116,139,.25); height:10px; border-radius: 999px; overflow:hidden;}
+.progress-bar{ height:100%; background: linear-gradient(90deg,#06b6d4,#3b82f6); }
+.badge{ font-size:12px; color:#a3aed0; }
 </style>
-        """,
-        unsafe_allow_html=True,
-    )
+""", unsafe_allow_html=True)
 
-def sidebar(active="documents"):
-    st.sidebar.markdown("### ")
-    def nav_chip(text, id_):
-        cls = "sidebar-chip active" if id_ == active else "sidebar-chip"
-        st.sidebar.markdown(f'<div class="{cls}">• {text}</div>', unsafe_allow_html=True)
-    nav_chip("Dashboard", "dashboard")
-    nav_chip("Templates", "templates")
-    nav_chip("Documents", "documents")
-    st.sidebar.markdown("---")
-    nav_chip("Settings", "settings")
-    nav_chip("Help", "help")
+# ----------------- Streamlit UI -----------------
+st.markdown('<div class="h1-title">DOCUMENT GENERATOR</div>', unsafe_allow_html=True)
+st.markdown('<div class="h1-sub">Automate Your Documents</div>', unsafe_allow_html=True)
+st.write("")
 
-def header():
-    st.markdown(
-        """
-<div class="header" style="display:flex;justify-content:flex-end;">
-  <div style="display:flex;align-items:center;gap:.6rem;padding:.35rem .8rem;border:1px solid rgba(148,163,184,.25);border-radius:999px;background:rgba(31,41,55,.6);">
-    <div style="width:10px;height:10px;border-radius:999px;background:#22c55e;"></div>
-    <span style="color:#cbd5e1;">Jin-Young</span>
-  </div>
-</div>
-        """,
-        unsafe_allow_html=True,
-    )
+left, right = st.columns(2, gap="large")
 
-def upload_card(title, hint, accept, key):
-    c = st.container()
-    with c:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        file = st.file_uploader("", type=accept, key=key, label_visibility="collapsed")
-        icon = "✅" if file else "☁️"
-        st.markdown(
-            f"""
-<div style="display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;">
-  <div style="width:84px;height:84px;border-radius:16px;display:flex;align-items:center;justify-content:center;background:{'rgba(34,197,94,.18)' if file else 'rgba(55,65,81,.4)'};font-size:38px;">{icon}</div>
-  <div>
-    <div style="font-weight:800;font-size:20px;color:white;letter-spacing:.3px;">{title}</div>
-    <div style="color:#94a3b8;font-size:13px;margin-top:4px;">{file.name if file else hint}</div>
-  </div>
-  <div><span class="btn">Browse Files</span></div>
-</div>
-            """,
-            unsafe_allow_html=True,
+with left:
+    st.markdown('<div class="dg-card">', unsafe_allow_html=True)
+    st.markdown('<div class="icon-bubble">📊</div>', unsafe_allow_html=True)
+    st.subheader("UPLOAD EXCEL TEMPLATE")
+    st.caption("엑셀 템플릿(.xlsx / .xlsm)")
+    xlsx_file = st.file_uploader("Drag&Drop or Browse", type=["xlsx", "xlsm"], label_visibility="collapsed")
+    st.markdown('<div style="text-align:center;">', unsafe_allow_html=True)
+    st.button("Browse Files", key="btn_xlsx_dummy", help="위 업로더와 동일")
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+with right:
+    st.markdown('<div class="dg-card">', unsafe_allow_html=True)
+    st.markdown('<div class="icon-bubble">📝</div>', unsafe_allow_html=True)
+    st.subheader("UPLOAD WORD TEMPLATE")
+    st.caption("워드 템플릿(.docx)")
+    docx_tpl = st.file_uploader("Drag&Drop or Browse ", type=["docx"], label_visibility="collapsed")
+    st.markdown('<div style="text-align:center;">', unsafe_allow_html=True)
+    st.button("Browse Files ", key="btn_docx_dummy", help="위 업로더와 동일")
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+st.write("")
+st.markdown('<div class="dg-card">', unsafe_allow_html=True)
+out_name = st.text_input("출력 파일명", value=DEFAULT_OUT, key="outname", label_visibility="visible")
+st.markdown('</div>', unsafe_allow_html=True)
+
+# 시트 선택(간단 드롭다운)
+sheet_choice = None
+if xlsx_file:
+    wb_tmp = load_workbook(filename=io.BytesIO(xlsx_file.getvalue()), data_only=True)
+    sheet_choice = st.selectbox("Excel 시트 선택", wb_tmp.sheetnames,
+                                index=wb_tmp.sheetnames.index(TARGET_SHEET) if TARGET_SHEET in wb_tmp.sheetnames else 0)
+
+gen_col, _ = st.columns([1,3])
+with gen_col:
+    run = st.button("문서 생성하기", type="primary", use_container_width=True)
+
+# ----------------- 실행 -----------------
+if run:
+    if not xlsx_file or not docx_tpl:
+        st.error("엑셀 파일과 워드 템플릿을 모두 업로드하세요.")
+        st.stop()
+
+    # 진행바 느낌(UX)
+    prog = st.empty()
+    with st.spinner("Generating Documents…"):
+        prog.markdown('<div class="dg-card"><div class="badge">Generating… 0%</div>'
+                      '<div class="progress-wrap"><div class="progress-bar" style="width:0%"></div></div></div>',
+                      unsafe_allow_html=True)
+
+        # Excel 로드
+        wb = load_workbook(filename=io.BytesIO(xlsx_file.read()), data_only=True)
+        ws = wb[sheet_choice] if sheet_choice else (wb[TARGET_SHEET] if TARGET_SHEET in wb.sheetnames else wb[wb.sheetnames[0]])
+        prog.markdown('<div class="dg-card"><div class="badge">Generating… 25%</div>'
+                      '<div class="progress-wrap"><div class="progress-bar" style="width:25%"></div></div></div>',
+                      unsafe_allow_html=True)
+
+        # Word 템플릿 로드
+        tpl_bytes = docx_tpl.read()
+        doc = Document(io.BytesIO(tpl_bytes))
+
+        # 치환
+        replacer = make_replacer(ws)
+        replace_everywhere(doc, replacer)
+        prog.markdown('<div class="dg-card"><div class="badge">Generating… 60%</div>'
+                      '<div class="progress-wrap"><div class="progress-bar" style="width:60%"></div></div></div>',
+                      unsafe_allow_html=True)
+
+        # DOCX 메모리 저장
+        docx_buf = io.BytesIO()
+        doc.save(docx_buf)
+        docx_buf.seek(0)
+        docx_bytes = docx_buf.getvalue()
+
+        # PDF 변환 시도
+        pdf_bytes = convert_docx_to_pdf_bytes(docx_bytes)
+        prog.markdown('<div class="dg-card"><div class="badge">Generating… 85%</div>'
+                      '<div class="progress-wrap"><div class="progress-bar" style="width:85%"></div></div></div>',
+                      unsafe_allow_html=True)
+
+        # ZIP 묶기
+        zip_buf = io.BytesIO()
+        with ZipFile(zip_buf, "w", ZIP_DEFLATED) as zf:
+            zf.writestr(ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT, docx_bytes)
+            if pdf_bytes:
+                zf.writestr(ensure_pdf(out_name), pdf_bytes)
+        zip_buf.seek(0)
+
+        prog.markdown('<div class="dg-card"><div class="badge">Completed 100%</div>'
+                      '<div class="progress-wrap"><div class="progress-bar" style="width:100%"></div></div></div>',
+                      unsafe_allow_html=True)
+
+    # 누락 토큰 리포트(정보용)
+    doc_after = Document(io.BytesIO(docx_bytes))
+    leftovers = sorted(list(collect_leftover_tokens(doc_after)))
+    if leftovers:
+        with st.expander("템플릿에 남은 치환 토큰(참고용)"):
+            st.write(", ".join(leftovers))
+
+    st.success("완료되었습니다.")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.download_button(
+            "WORD+PDF 한번에 다운로드 (ZIP)",
+            data=zip_buf,
+            file_name=(ensure_pdf(out_name).replace(".pdf", "") + "_both.zip"),
+            mime="application/zip",
+            use_container_width=True
         )
-        st.markdown('</div>', unsafe_allow_html=True)
-    return file
-
-# ----------------- APP -----------------
-def main():
-    st.set_page_config(page_title="Document Generator", page_icon="📄", layout="wide")
-    inject_css()
-    sidebar("documents")
-    header()
-
-    st.markdown("<div style='padding:28px;'></div>", unsafe_allow_html=True)
-    st.markdown(
-        "<div style='max-width:1080px;margin:0 auto;'>"
-        "<div style='margin-bottom:28px;'>"
-        "<div style='font-size:34px;font-weight:900;color:white;margin-bottom:6px;'>DOCUMENT GENERATOR</div>"
-        "<div style='color:#94a3b8;font-size:16px;'>Automate Your Documents</div>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
-
-    col1, col2 = st.columns(2, gap="large")
-    with col1:
-        xlsx_file = upload_card(
-            "UPLOAD EXCEL TEMPLATE",
-            "엑셀 템플릿(.xlsx / .xlsm)",
-            ["xlsx", "xlsm"],
-            "excel",
+    with c2:
+        st.download_button(
+            "DOCX만 다운로드",
+            data=docx_bytes,
+            file_name=ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT,
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True
         )
-    with col2:
-        docx_tpl = upload_card(
-            "UPLOAD WORD TEMPLATE",
-            "워드 템플릿(.docx)",
-            ["docx"],
-            "docx",
+    if pdf_bytes:
+        st.download_button(
+            "PDF만 다운로드",
+            data=pdf_bytes,
+            file_name=ensure_pdf(out_name),
+            mime="application/pdf",
+            use_container_width=True
         )
-
-    # 파일명
-    st.markdown('<div class="card" style="margin-top:16px;">', unsafe_allow_html=True)
-    out_name = st.text_input("출력 파일명", value=DEFAULT_OUT, label_visibility="collapsed")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # 시트 선택(있으면)
-    sheet_choice = None
-    if xlsx_file:
-        wb_tmp = load_workbook(filename=io.BytesIO(xlsx_file.getvalue()), data_only=True)
-        sheet_choice = st.selectbox(
-            "Excel 시트",
-            wb_tmp.sheetnames,
-            index=wb_tmp.sheetnames.index(TARGET_SHEET) if TARGET_SHEET in wb_tmp.sheetnames else 0,
-            label_visibility="collapsed",
-        )
-
-    # 생성 버튼
-    disabled = not (xlsx_file and docx_tpl)
-    gen = st.button(
-        "문서 생성하기",
-        type="primary",
-        disabled=disabled,
-        use_container_width=True,
-        help=None,
-    )
-    st.markdown(
-        f'<style>.stButton button{{}} .stButton button {{}} .stButton button {{}} </style>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        f'<div><button class="btn-primary" {"disabled" if disabled else ""} style="display:none;"></button></div>',
-        unsafe_allow_html=True,
-    )
-
-    # 진행 + 처리
-    if gen:
-        prog_box = st.container()
-        with prog_box:
-            st.markdown('<div class="progress">', unsafe_allow_html=True)
-            top = st.empty()
-            bar = st.empty()
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        def draw_progress(pct):
-            top.markdown(
-                f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
-                f'<span style="color:#e5e7eb;">Generating Documents...</span>'
-                f'<span style="color:#67e8f9;font-weight:800;">{pct}%</span>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-            bar.markdown(
-                f'<div class="progress-track"><div class="progress-bar" style="width:{pct}%"></div></div>',
-                unsafe_allow_html=True,
-            )
-
-        draw_progress(12)
-
-        try:
-            # Excel 로드
-            wb = load_workbook(filename=io.BytesIO(xlsx_file.read()), data_only=True)
-            ws = wb[sheet_choice] if sheet_choice else (
-                wb[TARGET_SHEET] if TARGET_SHEET in wb.sheetnames else wb[wb.sheetnames[0]]
-            )
-
-            # Word 템플릿 로드
-            tpl_bytes = docx_tpl.read()
-            doc = Document(io.BytesIO(tpl_bytes))
-
-            # 치환
-            replacer = make_replacer(ws)
-            replace_everywhere(doc, replacer)
-            draw_progress(48)
-
-            # DOCX 저장
-            docx_buf = io.BytesIO()
-            doc.save(docx_buf)
-            docx_buf.seek(0)
-            docx_bytes = docx_buf.getvalue()
-
-            # PDF 변환
-            pdf_bytes = convert_docx_to_pdf_bytes(docx_bytes)
-            draw_progress(86)
-
-            # ZIP
-            zip_buf = io.BytesIO()
-            with ZipFile(zip_buf, "w", ZIP_DEFLATED) as zf:
-                zf.writestr(ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT, docx_bytes)
-                if pdf_bytes:
-                    zf.writestr(ensure_pdf(out_name), pdf_bytes)
-            zip_buf.seek(0)
-
-            # 누락 토큰
-            doc_after = Document(io.BytesIO(docx_bytes))
-            leftovers = sorted(list(collect_leftover_tokens(doc_after)))
-
-            draw_progress(100)
-
-            # 결과 블록
-            st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-            st.markdown(
-                '<div class="card" style="display:flex;flex-direction:column;gap:12px;">',
-                unsafe_allow_html=True,
-            )
-            st.markdown(
-                '<div class="kb">'
-                '<span class="badge ok">● COMPLETED</span>'
-                f'<span style="margin-left:.5rem;color:#9ca3af;">{ensure_docx(out_name)}</span>'
-                '</div>',
-                unsafe_allow_html=True,
-            )
-
-            c1, c2, c3 = st.columns([1,1,1], gap="large")
-            with c1:
-                st.download_button(
-                    "⬇️ Download DOCX",
-                    data=docx_bytes,
-                    file_name=ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT,
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    use_container_width=True,
-                )
-            with c2:
-                st.download_button(
-                    "⬇️ Download PDF",
-                    data=pdf_bytes if pdf_bytes else b"",
-                    file_name=ensure_pdf(out_name),
-                    mime="application/pdf",
-                    use_container_width=True,
-                    disabled=pdf_bytes is None,
-                    help=None if pdf_bytes else "PDF 변환 환경(Word/LibreOffice)이 없어 비활성화됨",
-                )
-            with c3:
-                st.download_button(
-                    "⬇️ Download ZIP (Both)",
-                    data=zip_buf,
-                    file_name=(ensure_pdf(out_name).replace(".pdf", "") + "_both.zip"),
-                    mime="application/zip",
-                    use_container_width=True,
-                )
-
-            if leftovers:
-                with st.expander("템플릿에 남은 치환 토큰"):
-                    st.write(", ".join(leftovers))
-
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            # Recent-like 리스트(예시)
-            st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-            st.markdown(
-                '<div style="display:flex;justify-content:space-between;align-items:center;">'
-                '<div style="font-weight:800;color:white;">RECENT GENERATIONS</div>'
-                '<div class="kb" style="gap:16px;">'
-                '<span class="badge ok">✔ COMPLETED</span>'
-                '<span class="badge wait">⏳ PENDING</span>'
-                '<span class="badge err">✖ ERROR</span>'
-                '</div></div>',
-                unsafe_allow_html=True,
-            )
-            for txt, badge in [
-                (f"{datetime.today():%Y-%m-%d}_납입요청서_완료.docx", "ok"),
-                (f"{datetime.today():%Y-%m-%d}_납입요청서_대기.docx", "wait"),
-                (f"{datetime.today():%Y-%m-%d}_납입요청서_오류.docx", "err"),
-            ]:
-                st.markdown(
-                    f'<div class="card" style="padding:14px;display:flex;align-items:center;justify-content:space-between;">'
-                    f'<div style="display:flex;align-items:center;gap:.6rem;">'
-                    f'<span class="badge {badge}">●</span><span style="color:#cbd5e1;">{txt}</span></div>'
-                    f'<span style="color:#94a3b8;font-size:13px;">just now</span></div>',
-                    unsafe_allow_html=True,
-                )
-
-        except Exception as e:
-            draw_progress(100)
-            st.error("문서 생성 중 오류가 발생했습니다.")
-            st.exception(e)
-
-    # 푸터 여백
-    st.markdown("</div>", unsafe_allow_html=True)
-
-if __name__ == "__main__":
-    main()
