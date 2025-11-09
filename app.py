@@ -322,9 +322,13 @@ st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
 col_left, col_right = st.columns([1.2, 1])
 with col_left:
     with st.form("input_form", clear_on_submit=False):
-        st.markdown('<div class="glass glass-uploader">', unsafe_allow_html=True)
-        xlsx_file = st.file_uploader("엑셀 파일", type=["xlsx", "xlsm"], accept_multiple_files=False, key="excel_up")
-        docx_tpl  = st.file_uploader("워드 템플릿(.docx)", type=["docx"], accept_multiple_files=False, key="word_up")
+        st.markdown('<div class="excel-upload glass-uploader">', unsafe_allow_html=True)
+        xlsx_file = st.file_uploader("엑셀 파일", type=["xlsx", "xlsm"], accept_multiple_files=False)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # 워드 업로더 (워드 블루 / Glass UI)
+        st.markdown('<div class="word-upload glass-uploader">', unsafe_allow_html=True)
+        docx_tpl = st.file_uploader("워드 템플릿(.docx)", type=["docx"], accept_multiple_files=False)
         st.markdown('</div>', unsafe_allow_html=True)
 
         out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
