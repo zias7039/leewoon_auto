@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
-import io
-import os
-import re
-import tempfile
-import subprocess
+import io, os, re, tempfile, subprocess
 from datetime import datetime, date
 from decimal import Decimal
 from zipfile import ZipFile, ZIP_DEFLATED
@@ -14,19 +10,18 @@ from docx import Document
 from docx.table import _Cell
 from docx.text.paragraph import Paragraph
 
-# 선택: docx2pdf가 있으면 활용
 try:
     from docx2pdf import convert as docx2pdf_convert
 except Exception:
     docx2pdf_convert = None
 
-# ----------------- 상수 -----------------
-TOKEN_RE = re.compile(r"\{\{([A-Z]+[0-9]+)(?:\|([^}]+))?\}\}")  # {{A1}} or {{A1|FORMAT}}
+# ---------- 상수 ----------
+TOKEN_RE = re.compile(r"\{\{([A-Z]+[0-9]+)(?:\|([^}]+))?\}\}")
 LEFTOVER_RE = re.compile(r"\{\{[^}]+\}\}")
 DEFAULT_OUT = f"{datetime.today():%Y%m%d}_#_납입요청서_DB저축은행.docx"
 TARGET_SHEET = "2.  배정후 청약시"
 
-# ----------------- 유틸 -----------------
+# ---------- 유틸 ----------
 def ensure_docx(name: str) -> str:
     name = (name or "").strip()
     return name if name.lower().endswith(".docx") else (name + ".docx")
@@ -78,32 +73,21 @@ def value_to_text(v) -> str:
         return s
     return "" if v is None else str(v)
 
-# ----------------- 포맷 적용 -----------------
 def apply_inline_format(value, fmt: str | None) -> str:
-    """
-    {{A1|#,###}}, {{B7|YYYY.MM.DD}} 형태의 포맷을 간단 지원.
-    - 날짜 포맷: YYYY -> %Y, MM -> %m, DD -> %d
-    - 숫자 포맷: '#,###' / '#,###.00' 식 → 그룹핑 + 소수 자릿수
-    """
     if fmt is None or fmt.strip() == "":
         return value_to_text(value)
 
-    # 날짜 포맷 감지
     if any(tok in fmt for tok in ("YYYY", "MM", "DD")):
-        # 값이 문자열이어도 'YYYY-MM-DD'면 날짜로 파싱
         if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip()):
             value = datetime.strptime(value.strip(), "%Y-%m-%d").date()
         if isinstance(value, (datetime, date)):
-            f = fmt
-            f = f.replace("YYYY", "%Y").replace("MM", "%m").replace("DD", "%d")
+            f = fmt.replace("YYYY", "%Y").replace("MM", "%m").replace("DD", "%d")
             return value.strftime(f)
         return value_to_text(value)
 
-    # 숫자 포맷 간이 처리
     if re.fullmatch(r"[#,0]+(?:\.[0#]+)?", fmt.replace(",", "")):
         try:
             num = float(str(value).replace(",", ""))
-            # 소수점 자릿수 계산
             decimals = 0
             if "." in fmt:
                 decimals = len(fmt.split(".")[1])
@@ -111,13 +95,9 @@ def apply_inline_format(value, fmt: str | None) -> str:
         except Exception:
             return value_to_text(value)
 
-    # 그 외는 기본 변환
     return value_to_text(value)
 
-# ----------------- 문서 순회/치환 -----------------
 def iter_block_items(parent):
-    """문서의 문단/표 셀 모두 순회 (본문, 헤더/푸터 공통 사용)."""
-    # python-docx 타입 체크 대신 duck-typing으로 안전 처리
     if hasattr(parent, "paragraphs") and hasattr(parent, "tables"):
         for p in parent.paragraphs:
             yield p
@@ -163,7 +143,6 @@ def replace_everywhere(doc: Document, repl_func):
                 if isinstance(item, Paragraph):
                     replace_in_paragraph(item, repl_func)
 
-# ----------------- Excel → 치환 콜백 -----------------
 def make_replacer(ws):
     def _repl(text: str) -> str:
         def sub(m):
@@ -175,7 +154,6 @@ def make_replacer(ws):
             return apply_inline_format(v, fmt)
         replaced = TOKEN_RE.sub(sub, text)
 
-        # YYYY/MM/DD 같은 더미 템플릿 치환(간단)
         sp = "    "
         today = datetime.today()
         today_str = f"{today.year}년{sp}{today.month}월{sp}{today.day}일"
@@ -184,7 +162,6 @@ def make_replacer(ws):
         return replaced
     return _repl
 
-# ----------------- DOCX → PDF -----------------
 def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> bytes | None:
     try:
         with tempfile.TemporaryDirectory() as td:
@@ -193,7 +170,6 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> bytes | None:
             with open(in_path, "wb") as f:
                 f.write(docx_bytes)
 
-            # 1) Word (Windows) 경로
             if docx2pdf_convert is not None:
                 try:
                     docx2pdf_convert(in_path, out_path)
@@ -203,7 +179,6 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> bytes | None:
                 except Exception:
                     pass
 
-            # 2) LibreOffice headless
             if has_soffice():
                 try:
                     subprocess.run(
@@ -219,7 +194,6 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> bytes | None:
         pass
     return None
 
-# ----------------- 누락 토큰 수집 -----------------
 def collect_leftover_tokens(doc: Document) -> set[str]:
     leftovers = set()
     for item in iter_block_items(doc):
@@ -236,85 +210,90 @@ def collect_leftover_tokens(doc: Document) -> set[str]:
                         leftovers.add(m)
     return leftovers
 
-# ----------------- Streamlit UI -----------------
-st.set_page_config(
-    page_title="납입요청서 자동 생성",
-    page_icon="🧾",
-    layout="wide",
-)
+# ---------- UI ----------
+st.set_page_config(page_title="납입요청서 자동 생성", page_icon="🧾", layout="wide")
 
-# 최소 CSS 다듬기
+# Glassmorphism + 브랜드 컬러
 st.markdown("""
 <style>
-/* 공통 glass layer */
-.excel-upload [data-testid="stFileUploaderDropzone"],
-.word-upload [data-testid="stFileUploaderDropzone"] {
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border-radius: 14px !important;
-  border: 1px solid rgba(255,255,255,0.22) !important;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.28);
-  transition: 0.25s ease;
-  padding: 6px !important;
+:root{
+  --glass-bg: rgba(17, 24, 39, .35);
+  --glass-brd: rgba(255,255,255,.18);
+  --glass-shadow: 0 12px 40px rgba(0,0,0,.35);
+  --excel: #217346;    /* Excel signature */
+  --excel-ink: #D1FAE5;
+  --word:  #185ABD;    /* Word signature */
+  --word-ink: #DBEAFE;
 }
 
-/* 엑셀 업로드 : glass green */
-.excel-upload [data-testid="stFileUploaderDropzone"] {
-  background: linear-gradient(
-      135deg,
-      rgba(24, 92, 55, 0.55),
-      rgba(24, 92, 55, 0.28)
-  );
-}
-.excel-upload [data-testid="stFileUploaderDropzone"]:hover {
-  background: linear-gradient(
-      135deg,
-      rgba(24, 92, 55, 0.68),
-      rgba(24, 92, 55, 0.38)
-  );
-}
+/* 전체 배경과 컨테이너 */
+.block-container{padding-top:1rem;}
+#MainMenu, footer{visibility:hidden;}
 
-/* 워드 업로드 : glass blue */
-.word-upload [data-testid="stFileUploaderDropzone"] {
-  background: linear-gradient(
-      135deg,
-      rgba(24, 90, 189, 0.55),
-      rgba(24, 90, 189, 0.28)
-  );
-}
-.word-upload [data-testid="stFileUploaderDropzone"]:hover {
-  background: linear-gradient(
-      135deg,
-      rgba(24, 90, 189, 0.68),
-      rgba(24, 90, 189, 0.38)
-  );
-}
-
-/* 내부 텍스트 색 */
-.excel-upload [data-testid="stFileUploaderDropzone"] div,
-.word-upload [data-testid="stFileUploaderDropzone"] div {
-  color: rgba(255,255,255,0.92) !important;
-  font-weight: 500;
-}
-
-/* Browse 버튼 */
-.excel-upload [data-testid="stFileUploaderBrowseButton"],
-.word-upload [data-testid="stFileUploaderBrowseButton"] {
+/* 카드(유리) 공통 */
+.glass{
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-brd);
+  border-radius: 16px;
+  box-shadow: var(--glass-shadow);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  background: rgba(0,0,0,0.35) !important;
-  border: 1px solid rgba(255,255,255,0.35) !important;
-  color: white !important;
-  border-radius: 10px !important;
-  padding: 6px 16px !important;
-  transition: 0.25s ease;
 }
 
-.excel-upload [data-testid="stFileUploaderBrowseButton"]:hover,
-.word-upload [data-testid="stFileUploaderBrowseButton"]:hover {
-  background: rgba(0,0,0,0.55) !important;
-  border-color: rgba(255,255,255,0.55) !important;
+/* 우측 안내 패널 */
+div[data-testid="column"]:last-child > div{
+  padding:16px 16px 8px 16px;
 }
+
+/* 폼 자체를 유리카드로 */
+div[data-testid="stForm"]{
+  padding: 16px 16px 6px 16px;
+  border-radius: 16px;
+}
+div[data-testid="stForm"].glass{}
+
+/* 업로더 공통(유리) */
+.glass-uploader [data-testid="stFileUploaderDropzone"]{
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+  border-radius: 14px;
+  border: 1px solid var(--glass-brd);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.glass-uploader [data-testid="stFileUploader"] section{gap:6px;}
+.glass-uploader [data-testid="stFileUploader"] button{border-radius:10px}
+
+/* --- 업로더 컬러링: 폼 안의 1번째=엑셀, 2번째=워드 --- */
+div[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(1) [data-testid="stFileUploaderDropzone"]{
+  border: 1px solid color-mix(in srgb, var(--excel) 55%, white);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--excel) 32%, transparent);
+}
+div[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(1) [data-testid="stFileUploaderDropzone"] *{
+  color: var(--excel-ink);
+}
+div[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(1) button{
+  background: color-mix(in srgb, var(--excel) 50%, black);
+  border: 1px solid color-mix(in srgb, var(--excel) 65%, white);
+}
+
+/* 워드 업로더 */
+div[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) [data-testid="stFileUploaderDropzone"]{
+  border: 1px solid color-mix(in srgb, var(--word) 55%, white);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--word) 32%, transparent);
+}
+div[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) [data-testid="stFileUploaderDropzone"] *{
+  color: var(--word-ink);
+}
+div[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) button{
+  background: color-mix(in srgb, var(--word) 50%, black);
+  border: 1px solid color-mix(in srgb, var(--word) 65%, white);
+}
+
+/* 상태창/버튼도 유리느낌 보정 */
+.stButton>button{height:44px; border-radius:10px}
+[data-testid="stStatusWidget"]{border-radius:14px; backdrop-filter: blur(10px);}
+[data-testid="stDownloadButton"] > button{min-width:220px; border-radius:10px}
+.small-note{font-size:.85rem; opacity:.8}
 </style>
 """, unsafe_allow_html=True)
 
@@ -323,17 +302,13 @@ st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
 col_left, col_right = st.columns([1.2, 1])
 with col_left:
     with st.form("input_form", clear_on_submit=False):
-        st.markdown('<div class="excel-upload">', unsafe_allow_html=True)
-        xlsx_file = st.file_uploader("엑셀 파일", type=["xlsx", "xlsm"], accept_multiple_files=False)
+        st.markdown('<div class="glass glass-uploader">', unsafe_allow_html=True)
+        xlsx_file = st.file_uploader("엑셀 파일", type=["xlsx", "xlsm"], accept_multiple_files=False, key="excel_up")
+        docx_tpl  = st.file_uploader("워드 템플릿(.docx)", type=["docx"], accept_multiple_files=False, key="word_up")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown('<div class="word-upload">', unsafe_allow_html=True)
-        docx_tpl = st.file_uploader("워드 템플릿(.docx)", type=["docx"], accept_multiple_files=False)
-        st.markdown('</div>', unsafe_allow_html=True)
+        out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
 
-    out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
-
-        # 업로드되면 시트 이름 미리 읽어 선택
         sheet_choice = None
         if xlsx_file is not None:
             try:
@@ -343,7 +318,7 @@ with col_left:
                     wb_tmp.sheetnames,
                     index=wb_tmp.sheetnames.index(TARGET_SHEET) if TARGET_SHEET in wb_tmp.sheetnames else 0
                 )
-            except Exception as e:
+            except Exception:
                 st.warning("엑셀 미리보기 중 문제가 발생했습니다. 생성 시도는 가능합니다.")
 
         submitted = st.form_submit_button("문서 생성", use_container_width=True)
@@ -351,34 +326,30 @@ with col_left:
 with col_right:
     st.markdown("#### 안내")
     st.markdown(
-        "- **{{A1}} / {{B7|YYYY.MM.DD}} / {{C3|#,###.00}}** 형식의 인라인 포맷을 지원합니다.\n"
-        "- **문서 생성**을 누르면 WORD와 PDF를 만들어 **개별 다운로드**와 **ZIP 묶음**을 제공합니다.\n"
-        "- PDF 변환은 **MS Word(docx2pdf)** 또는 **LibreOffice(soffice)** 가 설치된 환경에서 동작합니다.",
+        "- `{{A1}}`, `{{B7|YYYY.MM.DD}}`, `{{C3|#,###.00}}` 포맷 지원\n"
+        "- 생성 시 WORD와 PDF 각각 다운로드 + ZIP 제공\n"
+        "- PDF 변환은 MS Word(docx2pdf) 또는 LibreOffice(soffice) 필요"
     )
-    # 템플릿 토큰 간단 미리보기(있을 때만)
-    if docx_tpl is not None:
+    if 'word_up' in st.session_state and st.session_state['word_up'] is not None:
         try:
-            doc_preview = Document(io.BytesIO(docx_tpl.getvalue()))
+            doc_preview = Document(io.BytesIO(st.session_state['word_up'].getvalue()))
             sample_tokens = set()
-            for i, p in enumerate(doc_preview.paragraphs[:80]):  # 처음 80문단만 가볍게 스캔
+            for p in doc_preview.paragraphs[:80]:
                 for m in re.findall(r"\{\{[^}]+\}\}", p.text or ""):
                     if len(sample_tokens) < 12:
                         sample_tokens.add(m)
+            st.markdown("**템플릿 토큰 샘플**" if sample_tokens else "템플릿에서 토큰을 찾지 못했습니다.")
             if sample_tokens:
-                st.markdown("**템플릿 토큰 샘플**")
                 st.code(", ".join(list(sample_tokens)))
-            else:
-                st.caption("템플릿에서 토큰을 찾지 못했습니다.")
         except Exception:
             st.caption("템플릿 미리보기를 불러오지 못했습니다.")
 
-# ============ 생성 실행 ============
+# ---------- 생성 실행 ----------
 if submitted:
     if not xlsx_file or not docx_tpl:
         st.error("엑셀과 템플릿을 모두 업로드하세요.")
         st.stop()
 
-    # 진행 상태 카드
     with st.status("문서 생성 중...", expanded=True) as status:
         try:
             st.write("1) 엑셀 로드")
@@ -405,7 +376,6 @@ if submitted:
             pdf_bytes = convert_docx_to_pdf_bytes(docx_bytes)
             pdf_ok = pdf_bytes is not None
 
-            # 남은 토큰 조사
             st.write("6) 남은 토큰 확인")
             doc_after = Document(io.BytesIO(docx_bytes))
             leftovers = sorted(list(collect_leftover_tokens(doc_after)))
@@ -416,10 +386,7 @@ if submitted:
             st.exception(e)
             st.stop()
 
-    # ===== 결과 영역 =====
     st.success("문서가 준비되었습니다.")
-
-    # 개별 다운로드 버튼 (Word / PDF)
     dl_cols = st.columns(3)
     with dl_cols[0]:
         st.download_button(
@@ -439,8 +406,6 @@ if submitted:
             help=None if pdf_ok else "PDF 변환 엔진(Word 또는 LibreOffice)이 없는 환경입니다.",
             use_container_width=True,
         )
-
-    # ZIP 묶음
     with dl_cols[2]:
         zip_buf = io.BytesIO()
         with ZipFile(zip_buf, "w", ZIP_DEFLATED) as zf:
@@ -456,7 +421,6 @@ if submitted:
             use_container_width=True,
         )
 
-    # 남은 토큰 보고(있을 때만)
     if leftovers:
         with st.expander("템플릿에 남아있는 토큰"):
             st.write(", ".join(leftovers))
