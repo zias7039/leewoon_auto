@@ -226,6 +226,26 @@ st.markdown("""
   --word-ink: #DBEAFE;
 }
 
+/* 업로더 전체 카드 컨테이너 */
+.excel-upload[data-testid="stFileUploader"] > div:first-child {
+    background: rgba(33, 115, 70, 0.22) !important;   /* Excel glass bg */
+    border-radius: 14px !important;
+    border: 1px solid rgba(33, 115, 70, 0.35) !important;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    padding: 8px 10px;
+}
+
+/* 워드 업로드 박스 */
+.word-upload[data-testid="stFileUploader"] > div:first-child {
+    background: rgba(24, 90, 189, 0.22) !important;   /* Word glass bg */
+    border-radius: 14px !important;
+    border: 1px solid rgba(24, 90, 189, 0.35) !important;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    padding: 8px 10px;
+}
+
 /* 전체 배경과 컨테이너 */
 .block-container{padding-top:1rem;}
 #MainMenu, footer{visibility:hidden;}
