@@ -1,162 +1,164 @@
 # ui_style.py
 import streamlit as st
 
-EXCEL_GREEN = "#22c55e"   # 밝은 네온 그린
-WORD_BLUE   = "#60a5fa"   # 밝은 네온 블루
+EXCEL_GREEN = "#22c55e"   # 밝은 엑셀 포인트 (스크린샷 느낌)
+WORD_BLUE   = "#3b82f6"   # 밝은 워드 포인트
 
 BASE_CSS = f"""
-/* ---------- Reset / Base ---------- */
-#MainMenu, footer {{visibility: hidden;}}
+/* ---------- Global Reset / Layout ---------- */
+#MainMenu, footer {{ display:none; }}
 .block-container {{
-  padding-top: 1rem;
-  max-width: 1080px;
+  max-width: 1180px;
+  padding-top: 1.2rem;
 }}
 html, body, [data-testid="stAppViewContainer"] {{
-  background: radial-gradient(1200px 800px at 10% 10%, rgba(59,130,246,.08) 0%, rgba(2,6,23,1) 55%) no-repeat,
-              radial-gradient(900px 700px at 90% 90%, rgba(34,197,94,.06) 0%, rgba(2,6,23,1) 60%) no-repeat,
-              #020617;
-  color: rgba(241,245,249,.96);
+  background: radial-gradient(1000px 600px at 10% 0%, rgba(59,130,246,.06), transparent 40%),
+              radial-gradient(900px 600px at 95% 10%, rgba(34,197,94,.06), transparent 35%),
+              #0b1220;
 }}
-
-/* ---------- Dashboard Header ---------- */
-.page-title {{
-  font-size: 26px; font-weight: 800; letter-spacing:.2px;
+/* Side bar */
+[data-testid="stSidebar"] > div:first-child {{
+  background: rgba(10,15,25,.7);
 }}
-.page-sub {{
-  margin-top:.25rem; color: rgba(148,163,184,.9);
-}}
-
-/* ---------- Card ---------- */
-.card {{
-  background: rgba(15,23,42,.55);
-  border: 1px solid rgba(148,163,184,.18);
-  border-radius: 18px;
-  padding: 22px;
-  box-shadow: 0 12px 60px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.02);
-  backdrop-filter: blur(8px);
-  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
-}}
-.card:hover {{
-  transform: translateY(-3px);
-  box-shadow: 0 18px 70px rgba(0,0,0,.45);
-  border-color: rgba(148,163,184,.28);
-}}
-
-/* ---------- Upload cards (icon + heading) ---------- */
-.upload-head {{
-  display:flex; gap:12px; align-items:center; margin-bottom:10px;
-}}
-.upload-icon {{
-  width:36px; height:36px; display:grid; place-items:center;
-  border-radius:12px; font-weight:700;
-  background: rgba(2,6,23,.6); border:1px solid rgba(148,163,184,.2);
-}}
-.upload-title {{ font-weight:800; font-size:15px; letter-spacing:.2px; }}
-.upload-sub {{ font-size:12.5px; color:rgba(148,163,184,.9); margin-top:2px; }}
-
-/* Excel / Word accent ring */
-.card.excel {{ box-shadow: 0 0 0 1px rgba(34,197,94,.35) inset, 0 10px 50px rgba(34,197,94,.10); }}
-.card.word  {{ box-shadow: 0 0 0 1px rgba(96,165,250,.35) inset, 0 10px 50px rgba(96,165,250,.10); }}
-
-/* ---------- Streamlit uploader zone ---------- */
-[data-testid="stFileUploader"] section {{ gap:10px !important; }}
-[data-testid="stFileUploaderDropzone"] {{
-  background: linear-gradient(180deg, rgba(17,24,39,.55), rgba(2,6,23,.55)) !important;
-  border: 2px dashed rgba(148,163,184,.30) !important;
-  border-radius: 14px !important;
-  min-height: 140px !important;
-  transition: all .25s ease !important;
-}}
-.excel [data-testid="stFileUploaderDropzone"] {{
-  border-color: rgba(34,197,94,.45) !important;
-}}
-.word [data-testid="stFileUploaderDropzone"] {{
-  border-color: rgba(96,165,250,.45) !important;
-}}
-[data-testid="stFileUploaderDropzone"]:hover {{
-  transform: translateY(-2px) !important;
-  box-shadow: 0 12px 40px rgba(0,0,0,.35) !important;
-}}
-.excel [data-testid="stFileUploaderDropzone"]:hover {{
-  box-shadow: 0 0 0 1px rgba(34,197,94,.35) inset, 0 14px 60px rgba(34,197,94,.18) !important;
-}}
-.word [data-testid="stFileUploaderDropzone"]:hover {{
-  box-shadow: 0 0 0 1px rgba(96,165,250,.35) inset, 0 14px 60px rgba(96,165,250,.18) !important;
-}}
-[data-testid="stFileUploaderDropzone"] p {{ color: rgba(203,213,225,.95) !important; }}
-[data-testid="stFileUploaderDropzone"] small {{ color: rgba(148,163,184,.9) !important; }}
-
-/* Buttons */
-.stButton>button, [data-testid="stFileUploader"] button {{
-  border-radius: 10px !important;
-  border:1px solid rgba(148,163,184,.25) !important;
-  background: rgba(30,41,59,.65) !important;
-  color: #e5e7eb !important;
-  padding: 8px 18px !important;
-}}
-.stButton>button:hover, [data-testid="stFileUploader"] button:hover {{
-  transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(0,0,0,.35) !important;
-}}
-
-/* ---------- Status ---------- */
-.status-wrap {{ display:flex; gap:12px; align-items:center; }}
-.badge {{
-  display:inline-flex; gap:6px; align-items:center;
-  padding:6px 10px; border-radius:999px; font-size:12.5px; font-weight:700;
-  border:1px solid rgba(148,163,184,.25); background: rgba(15,23,42,.6);
-}}
-.badge .dot {{width:8px;height:8px;border-radius:999px; display:inline-block;}
-.badge.ok .dot {{background: #22c55e;}}
-.badge.wait .dot {{background: #facc15;}}
-.badge.err .dot {{background: #ef4444;}}
-
-/* progress (override) */
-[data-testid="stProgress"] > div > div {{
-  background: rgba(15,23,42,.6); border-radius: 999px; border:1px solid rgba(148,163,184,.25);
-}}
-[data-testid="stProgress"] > div > div > div {{
-  border-radius: 999px; background: linear-gradient(90deg, {EXCEL_GREEN}, {WORD_BLUE});
-}}
-
-/* Sidebar icons */
-[data-testid="stSidebar"] {{
-  background: rgba(15,23,42,.65);
-  border-right:1px solid rgba(148,163,184,.18);
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] ul {{
+  padding-left: 0.6rem;
 }}
 .sidebar-item {{
-  display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px;
+  display:flex; align-items:center; gap:.5rem;
+  padding:.45rem .6rem; border-radius:.6rem;
+  color: #a9b5cc;
 }}
-.sidebar-item:hover {{ background: rgba(30,41,59,.65); }}
-.sidebar-ico {{
-  width:28px;height:28px;border-radius:10px; display:grid; place-items:center;
-  background: rgba(2,6,23,.6); border:1px solid rgba(148,163,184,.2);
+.sidebar-item:hover {{ background: rgba(148,163,184,.08); color:#e5eaf3; }}
+.sidebar-icon {{
+  width: 20px; height: 20px; display:inline-grid; place-items:center;
+  border-radius:.5rem; background: rgba(148,163,184,.12);
 }}
 
-/* scrollbar */
-::-webkit-scrollbar {{ width: 8px; height: 8px; }}
-::-webkit-scrollbar-thumb {{ background: rgba(148,163,184,.35); border-radius: 8px; }}
+/* ---------- Headings / Subtexts ---------- */
+.app-title {{
+  font-weight: 800; letter-spacing:.3px;
+  font-size: 1.55rem; color:#e6edf7; margin: .2rem 0 .15rem;
+}}
+.app-subtitle {{
+  color:#9fb1cc; margin-bottom:1.0rem;
+}}
+
+/* ---------- Glass Cards ---------- */
+.card {{
+  background: rgba(17,25,40,.55);
+  border: 1px solid rgba(148,163,184,.16);
+  border-radius: 16px;
+  padding: 22px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.28);
+  backdrop-filter: blur(8px);
+}}
+.card-header {{
+  display:flex; align-items:center; gap:.6rem; margin-bottom:.6rem;
+  color:#dfe7f5; font-weight:700;
+}}
+.badge {{
+  font-size:.75rem; padding:.15rem .48rem; border-radius:999px;
+  border:1px solid rgba(148,163,184,.25); color:#aab8d0;
+}}
+
+/* ---------- File Uploader ---------- */
+[data-testid="stFileUploader"] section {{ gap: 8px !important; }}
+[data-testid="stFileUploader"] button {{
+  border-radius: 10px !important; padding: 8px 18px !important;
+  font-weight: 600 !important;
+}}
+/* dropzone base */
+.card [data-testid="stFileUploaderDropzone"] {{
+  min-height: 140px !important;
+  border-radius: 14px !important;
+  border: 2px dashed rgba(148,163,184,.28) !important;
+  background: rgba(15,23,42,.55) !important;
+  transition: .2s ease all !important;
+}}
+.card [data-testid="stFileUploaderDropzone"]:hover {{
+  transform: translateY(-1px);
+  box-shadow: 0 8px 28px rgba(0,0,0,.25) !important;
+}}
+.card [data-testid="stFileUploaderDropzone"] p,
+.card [data-testid="stFileUploaderDropzone"] small {{
+  color:#b9c8e5 !important;
+}}
+/* Excel (left) */
+.excel [data-testid="stFileUploaderDropzone"] {{
+  border-color: {EXCEL_GREEN}33 !important;
+  background: linear-gradient(135deg, rgba(34,197,94,.10), rgba(34,197,94,.05)) !important;
+}}
+.excel [data-testid="stFileUploaderDropzone"]:hover {{
+  border-color: {EXCEL_GREEN}88 !important;
+  box-shadow: 0 10px 32px {EXCEL_GREEN}33 !important;
+}}
+.excel [data-testid="stFileUploader"] button {{
+  background: linear-gradient(135deg, #22c55e, #16a34a) !important;
+  color: #0c141f !important;
+}}
+/* Word (right) */
+.word [data-testid="stFileUploaderDropzone"] {{
+  border-color: {WORD_BLUE}33 !important;
+  background: linear-gradient(135deg, rgba(59,130,246,.10), rgba(59,130,246,.05)) !important;
+}}
+.word [data-testid="stFileUploaderDropzone"]:hover {{
+  border-color: {WORD_BLUE}88 !important;
+  box-shadow: 0 10px 32px {WORD_BLUE}33 !important;
+}}
+.word [data-testid="stFileUploader"] button {{
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important;
+  color: #eef4ff !important;
+}}
+
+/* ---------- Progress / Status ---------- */
+.progress-wrap {{
+  margin-top:.6rem; background: rgba(148,163,184,.15);
+  height: 10px; border-radius: 20px; overflow:hidden;
+}}
+.progress-bar {{
+  height:100%; width:0%; border-radius:20px;
+  background: linear-gradient(90deg, #22c55e, #3b82f6);
+  transition: width .35s ease;
+}}
+.legend {{
+  display:grid; gap:.45rem; margin-top:.4rem;
+}}
+.legend-item {{ display:flex; align-items:center; gap:.5rem; color:#b6c5df; }}
+.dot {{ width:10px; height:10px; border-radius:999px; display:inline-block; }}
+.dot.green {{ background:#22c55e; }}
+.dot.yellow{{ background:#fbbf24; }}
+.dot.red   {{ background:#ef4444; }}
+
+/* ---------- Small helpers ---------- */
+.hint {{ color:#9fb1cc; font-size:.9rem; }}
+.kbd {{
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding:.08rem .35rem; border-radius:.35rem;
+  border:1px solid rgba(148,163,184,.25); color:#cfe0ff;
+  background: rgba(17,24,39,.6);
+}}
 """
 
 def inject():
     st.markdown(f"<style>{BASE_CSS}</style>", unsafe_allow_html=True)
 
-def h4(text: str):
-    st.markdown(f'<div class="upload-title">{text}</div>', unsafe_allow_html=True)
+def page_header(title: str, subtitle: str = ""):
+    st.markdown(
+        f"""
+        <div class="app-title">{title}</div>
+        <div class="app-subtitle">{subtitle}</div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-def sub(text: str):
-    st.markdown(f'<div class="upload-sub">{text}</div>', unsafe_allow_html=True)
-
-def excel_icon():
-    return f"""
-    <div class="upload-icon" style="border-color:rgba(34,197,94,.35); box-shadow:0 0 24px rgba(34,197,94,.25) inset;">
-      <span style="color:{EXCEL_GREEN};font-weight:900;">X</span>
-    </div>
-    """
-
-def word_icon():
-    return f"""
-    <div class="upload-icon" style="border-color:rgba(96,165,250,.35); box-shadow:0 0 24px rgba(96,165,250,.25) inset;">
-      <span style="color:{WORD_BLUE};font-weight:900;">W</span>
-    </div>
-    """
+def legend():
+    st.markdown(
+        """
+        <div class="legend">
+          <div class="legend-item"><span class="dot green"></span>Completed</div>
+          <div class="legend-item"><span class="dot yellow"></span>Pending Approval</div>
+          <div class="legend-item"><span class="dot red"></span>Error: Data Mismatch</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
