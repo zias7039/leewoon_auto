@@ -14,7 +14,7 @@ from docx import Document
 from docx.table import _Cell
 from docx.text.paragraph import Paragraph
 
-# 스타일 모듈 (동일 폴더)
+# 스타일 모듈 (같은 폴더)
 from ui_style import inject as inject_style, open_div, close_div, h4
 
 # 선택: docx2pdf가 있으면 활용
@@ -86,6 +86,7 @@ def apply_inline_format(value, fmt: str | None) -> str:
     if fmt is None or fmt.strip() == "":
         return value_to_text(value)
 
+    # 날짜 포맷
     if any(tok in fmt for tok in ("YYYY", "MM", "DD")):
         if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip()):
             value = datetime.strptime(value.strip(), "%Y-%m-%d").date()
@@ -94,6 +95,7 @@ def apply_inline_format(value, fmt: str | None) -> str:
             return value.strftime(f)
         return value_to_text(value)
 
+    # 숫자 포맷
     if re.fullmatch(r"[#,0]+(?:\.[0#]+)?", fmt.replace(",", "")):
         try:
             num = float(str(value).replace(",", ""))
@@ -165,7 +167,7 @@ def make_replacer(ws):
             return apply_inline_format(v, fmt)
         replaced = TOKEN_RE.sub(sub, text)
 
-        # 템플릿에 남은 YYYY/MM/DD 류 더미를 오늘 날짜로 치환
+        # YYYY/MM/DD 같은 더미 템플릿 치환
         sp = "    "
         today = datetime.today()
         today_str = f"{today.year}년{sp}{today.month}월{sp}{today.day}일"
@@ -224,28 +226,25 @@ def collect_leftover_tokens(doc: Document) -> set[str]:
                         leftovers.add(m)
     return leftovers
 
-# ----------------- Streamlit UI -----------------
+# ================== UI ==================
 st.set_page_config(page_title="납입요청서 자동 생성", page_icon="🧾", layout="wide")
-
-# 스타일 주입 (ui_style.py)
 inject_style()
 
 st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
 
 col_left, col_right = st.columns([1.2, 1])
-
 with col_left:
     with st.form("input_form", clear_on_submit=False):
-        # Excel 업로더: Excel 시그니처 색 + 카드 레이아웃
+        # Excel 업로더 (엑셀 테마)
         open_div("excel-upload upload-card")
         h4("엑셀 파일")
-        xlsx_file = st.file_uploader(" ", type=["xlsx", "xlsm"], accept_multiple_files=False)
+        xlsx_file = st.file_uploader(" ", type=["xlsx", "xlsm"], accept_multiple_files=False, key="xlsx_upl")
         close_div()
 
-        # Word 업로더: 기본 카드 레이아웃만 (원하면 word-upload 클래스를 추가해서 별도 테마 만들면 됨)
-        open_div("upload-card")
+        # Word 업로더 (워드 테마)
+        open_div("word-upload upload-card")
         h4("워드 템플릿(.docx)")
-        docx_tpl = st.file_uploader("  ", type=["docx"], accept_multiple_files=False)
+        docx_tpl = st.file_uploader("  ", type=["docx"], accept_multiple_files=False, key="docx_upl")
         close_div()
 
         out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
@@ -330,6 +329,7 @@ if submitted:
             st.stop()
 
     st.success("문서가 준비되었습니다.")
+
     dl_cols = st.columns(3)
     with dl_cols[0]:
         st.download_button(
