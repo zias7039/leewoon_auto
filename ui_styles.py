@@ -11,7 +11,99 @@ PALETTES = {
         "brand-strong": "rgba(33,115,70,.55)",
         "text": "rgba(255,255,255,.92)",
     },
-    "word": {
+    "word": {# -*- coding: utf-8 -*-
+# ui_style.py
+# Streamlit 전용 스타일 주입 + 편의 함수
+
+from __future__ import annotations
+from datetime import datetime
+
+# 업로더 타입별 대표 색상 (엑셀/워드)
+EXCEL_COLOR = "#1D6F42"   # 초록 (엑셀)
+WORD_COLOR  = "#185ABD"   # 파랑 (워드)
+
+def inject(st, *, glass=True):
+    """
+    페이지 공통 CSS를 주입한다.
+    - glass=True: 유리(Glassmorphism) 느낌의 카드 배경
+    """
+    st.markdown(f"""
+<style>
+:root {{
+  --card-bg: rgba(2,6,23,{0.65 if glass else 0.08});
+  --card-bd: rgba(148,163,184,{0.25 if glass else 0.3});
+  --muted: rgba(0,0,0,.6);
+  --excel: {EXCEL_COLOR};
+  --word:  {WORD_COLOR};
+}}
+#MainMenu {{visibility: hidden;}}
+footer {{visibility: hidden;}}
+
+.block-container {{ padding-top: 1.2rem; }}
+
+.card {{
+  background: var(--card-bg);
+  border: 1px solid var(--card-bd);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.25);
+}}
+
+.small-note {{ font-size:.85rem; color: var(--muted); }}
+
+.stButton>button {{ height: 44px; border-radius: 10px; }}
+[data-testid="stDownloadButton"] > button {{ min-width: 220px; }}
+
+div[data-testid="stForm"].form-card {{
+  border: 1px solid var(--card-bd);
+  border-radius: 12px;
+  padding: 16px 16px 8px 16px;
+  background: rgba(17,24,39,{0.55 if glass else 0.03});
+}}
+
+.upload-tight [data-testid="stFileUploader"] section {{ gap: 6px; }}
+.upload-tight [data-testid="stFileUploader"] button {{ border-radius: 10px; }}
+
+.excel-upload [data-testid="stFileUploaderDropzone"] {{
+  border: 1px dashed color-mix(in srgb, var(--excel) 65%, white);
+  background: color-mix(in srgb, var(--excel) 8%, transparent);
+}}
+.excel-upload [data-testid="stFileUploaderDropzone"] p, 
+.excel-upload [data-testid="stFileUploaderDropzone"] span {{
+  color: color-mix(in srgb, var(--excel) 85%, white);
+}}
+
+.word-upload [data-testid="stFileUploaderDropzone"] {{
+  border: 1px dashed color-mix(in srgb, var(--word) 65%, white);
+  background: color-mix(in srgb, var(--word) 8%, transparent);
+}}
+.word-upload [data-testid="stFileUploaderDropzone"] p, 
+.word-upload [data-testid="stFileUploaderDropzone"] span {{
+  color: color-mix(in srgb, var(--word) 85%, white);
+}}
+
+/* 토큰 미리보기 code 박스 가독성 */
+.token-sample code {{
+  white-space: wrap;
+  line-height: 1.45;
+}}
+</style>
+""", unsafe_allow_html=True)
+
+def open_div(st, cls: str):
+    """任의 CSS 클래스로 div 오픈 (닫기는 close_div)."""
+    st.markdown(f'<div class="{cls}">', unsafe_allow_html=True)
+
+def close_div(st):
+    """open_div로 연 div 닫기."""
+    st.markdown('</div>', unsafe_allow_html=True)
+
+def h4(st, text: str):
+    st.markdown(f"#### {text}")
+
+def caption_now(st):
+    st.caption(datetime.now().strftime("%Y-%m-%d %H:%M"))
+
         "brand": "#185ABD",  # Word
         "brand-weak": "rgba(24,90,189,.25)",
         "brand-strong": "rgba(24,90,189,.55)",
