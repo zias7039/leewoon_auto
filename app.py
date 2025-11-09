@@ -147,17 +147,8 @@ def make_replacer(ws):
     return _repl
 
 # ---------- Streamlit UI ----------
-st.title("Word 템플릿 치환 (python-docx)")
-st.caption("· 템플릿의 {{A1}}, {{B7}} 토큰을 엑셀 값으로 치환 · 'YYYY년 MM월 DD일'은 공백 4칸으로 오늘 날짜로 치환")
-
 xlsx_file = st.file_uploader("엑셀 파일(.xlsx, .xlsm)", type=["xlsx", "xlsm"])
 docx_tpl = st.file_uploader("워드 템플릿(.docx)", type=["docx"])
-
-c1, c2 = st.columns(2)
-with c1:
-    do_strict = st.checkbox("시트명이 없으면 중단", value=False)  # ← 정의 추가
-with c2:
-    unify_font = st.checkbox("문서 전체 글꼴을 한컴바탕으로 통일", value=False)
 
 col1, = st.columns(1)
 with col1:
@@ -189,10 +180,6 @@ if run:
         # 치환 실행
         replacer = make_replacer(ws)
         replace_everywhere(doc, replacer)
-
-        # 글꼴 통일 옵션
-        if unify_font:
-            force_font(doc, "한컴바탕")
 
         # 결과 저장 → 다운로드 버튼
         buf = io.BytesIO()
