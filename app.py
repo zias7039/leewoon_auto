@@ -258,6 +258,33 @@ div[data-testid="stForm"] {border: 1px solid rgba(0,0,0,.08); padding: 1rem 1rem
 [data-testid="stDownloadButton"] > button {min-width: 220px;}
 /* 작은 캡션 */
 .small-note {font-size:.85rem; color: rgba(0,0,0,.6);}
+
+[data-testid="stFileUploaderDropzone"] {
+  background-color: rgba(255, 255, 255, 0.08);   /* 업로드 박스 배경색 */
+  border: 1px solid rgba(255,255,255,0.25);      /* 테두리 색 */
+  border-radius: 12px;                            /* 둥글기 */
+}
+
+/* 호버 시 색 변화 */
+[data-testid="stFileUploaderDropzone"]:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255,255,255,0.36);
+}
+
+/* 내부 텍스트 정제 */
+[data-testid="stFileUploaderDropzone"] > div {
+  color: #e5e7eb;   /* 텍스트 색 */
+}
+
+/* 업로더 버튼 색 */
+[data-testid="stFileUploaderBrowseButton"] {
+  background: #475569 !important;
+  color: white !important;
+  border-radius: 8px !important;
+}
+[data-testid="stFileUploaderBrowseButton"]:hover {
+  background: #64748b !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
