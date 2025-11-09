@@ -15,7 +15,7 @@ from docx.table import _Cell
 from docx.text.paragraph import Paragraph
 
 # 새로 추가: 스타일 모듈
-from ui_style import inject as inject_style, open_div, close_div, h4
+from .ui_style import inject as inject_style, open_div, close_div, h4
 
 # 선택: docx2pdf가 있으면 활용
 try:
