@@ -254,7 +254,7 @@ h1,h2,h3{ letter-spacing:.2px }
 }
 
 /* Streamlit 업로더 요소가 카드 안에서 꽉 차도록 */
-.upload-card [data-testid="stFileUploader"]{ width:100%; }
+.upload-card [data-testid="stFileUploader"]
 .upload-card [data-testid="stFileUploader"] > div{ width:100%; }
 .upload-card [data-testid="stFileUploaderDropzone"]{
   background: var(--dz-bg);
