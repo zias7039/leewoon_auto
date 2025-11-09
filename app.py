@@ -14,187 +14,358 @@ from docx import Document
 from docx.table import _Cell
 from docx.text.paragraph import Paragraph
 
-# 스타일 모듈 (중요)
+# 스타일 모듈 (동일 폴더)
 from ui_style import inject as inject_style, open_div, close_div, h4
 
+# 선택: docx2pdf가 있으면 활용
 try:
     from docx2pdf import convert as docx2pdf_convert
 except Exception:
     docx2pdf_convert = None
 
-TOKEN_RE = re.compile(r"\{\{([A-Z]+[0-9]+)(?:\|([^}]+))?\}\}")
+# ----------------- 상수 -----------------
+TOKEN_RE = re.compile(r"\{\{([A-Z]+[0-9]+)(?:\|([^}]+))?\}\}")  # {{A1}} or {{A1|FORMAT}}
 LEFTOVER_RE = re.compile(r"\{\{[^}]+\}\}")
 DEFAULT_OUT = f"{datetime.today():%Y%m%d}_#_납입요청서_DB저축은행.docx"
 TARGET_SHEET = "2.  배정후 청약시"
 
-def ensure_docx(name): return name if name.lower().endswith(".docx") else (name + ".docx")
-def ensure_pdf(name): return (name[:-5] if name.lower().endswith(".docx") else name) + ".pdf"
+# ----------------- 유틸 -----------------
+def ensure_docx(name: str) -> str:
+    name = (name or "").strip()
+    return name if name.lower().endswith(".docx") else (name + ".docx")
 
-def has_soffice():
-    return any(os.path.isfile(os.path.join(p, "soffice")) for p in os.environ.get("PATH","").split(os.pathsep))
+def ensure_pdf(name: str) -> str:
+    base = (name or "output").strip()
+    if base.lower().endswith(".docx"):
+        base = base[:-5]
+    return base + ".pdf"
 
-def try_format_as_date(v):
+def has_soffice() -> bool:
+    return any(
+        os.path.isfile(os.path.join(p, "soffice")) or os.path.isfile(os.path.join(p, "soffice.bin"))
+        for p in os.environ.get("PATH", "").split(os.pathsep)
+    )
+
+def try_format_as_date(v) -> str:
     try:
-        if v is None: return ""
-        if isinstance(v, (datetime, date)): return f"{v.year}. {v.month}. {v.day}."
+        if v is None:
+            return ""
+        if isinstance(v, (datetime, date)):
+            return f"{v.year}. {v.month}. {v.day}."
         s = str(v).strip()
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
             dt = datetime.strptime(s, "%Y-%m-%d").date()
             return f"{dt.year}. {dt.month}. {dt.day}."
-    except: pass
+    except Exception:
+        pass
     return ""
 
-def fmt_number(v):
+def fmt_number(v) -> str:
     try:
-        if isinstance(v,(int,float,Decimal)): return f"{float(v):,.0f}"
-        if isinstance(v,str):
-            raw=v.replace(",","")
+        if isinstance(v, (int, float, Decimal)):
+            return f"{float(v):,.0f}"
+        if isinstance(v, str):
+            raw = v.replace(",", "")
             if re.fullmatch(r"-?\d+(\.\d+)?", raw):
                 return f"{float(raw):,.0f}"
-    except: pass
+    except Exception:
+        pass
     return ""
 
-def value_to_text(v):
-    return try_format_as_date(v) or fmt_number(v) or ("" if v is None else str(v))
+def value_to_text(v) -> str:
+    s = try_format_as_date(v)
+    if s:
+        return s
+    s = fmt_number(v)
+    if s:
+        return s
+    return "" if v is None else str(v)
 
-def apply_inline_format(value, fmt):
-    if not fmt: return value_to_text(value)
-    if any(tok in fmt for tok in ("YYYY","MM","DD")):
-        if isinstance(value,str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}",value.strip()):
-            value=datetime.strptime(value.strip(),"%Y-%m-%d").date()
-        if isinstance(value,(datetime,date)):
-            return value.strftime(fmt.replace("YYYY","%Y").replace("MM","%m").replace("DD","%d"))
+# ----------------- 포맷 적용 -----------------
+def apply_inline_format(value, fmt: str | None) -> str:
+    if fmt is None or fmt.strip() == "":
         return value_to_text(value)
-    if re.fullmatch(r"[#,0]+(?:\.[0#]+)?", fmt.replace(",","")):
+
+    if any(tok in fmt for tok in ("YYYY", "MM", "DD")):
+        if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip()):
+            value = datetime.strptime(value.strip(), "%Y-%m-%d").date()
+        if isinstance(value, (datetime, date)):
+            f = fmt.replace("YYYY", "%Y").replace("MM", "%m").replace("DD", "%d")
+            return value.strftime(f)
+        return value_to_text(value)
+
+    if re.fullmatch(r"[#,0]+(?:\.[0#]+)?", fmt.replace(",", "")):
         try:
-            num=float(str(value).replace(",",""))
-            decimals = len(fmt.split(".")[1]) if "." in fmt else 0
+            num = float(str(value).replace(",", ""))
+            decimals = 0
+            if "." in fmt:
+                decimals = len(fmt.split(".")[1])
             return f"{num:,.{decimals}f}"
-        except: return value_to_text(value)
+        except Exception:
+            return value_to_text(value)
+
     return value_to_text(value)
 
+# ----------------- 문서 순회/치환 -----------------
 def iter_block_items(parent):
-    if hasattr(parent,"paragraphs"):
-        for p in parent.paragraphs: yield p
+    if hasattr(parent, "paragraphs") and hasattr(parent, "tables"):
+        for p in parent.paragraphs:
+            yield p
         for t in parent.tables:
             for row in t.rows:
                 for cell in row.cells:
-                    yield from iter_block_items(cell)
-    elif isinstance(parent,_Cell):
-        for p in parent.paragraphs: yield p
+                    for item in iter_block_items(cell):
+                        yield item
+    elif isinstance(parent, _Cell):
+        for p in parent.paragraphs:
+            yield p
         for t in parent.tables:
             for row in t.rows:
                 for cell in row.cells:
-                    yield from iter_block_items(cell)
+                    for item in iter_block_items(cell):
+                        yield item
 
-def replace_in_paragraph(par,repl):
-    changed=False
+def replace_in_paragraph(par: Paragraph, repl_func):
+    changed = False
     for run in par.runs:
-        new=repl(run.text)
-        if new!=run.text: run.text=new; changed=True
-    if changed: return
-    full="".join(r.text for r in par.runs)
-    new=repl(full)
-    if new==full: return
-    par.runs[0].text=new
-    for r in par.runs[1:]: r.text=""
+        new_text = repl_func(run.text)
+        if new_text != run.text:
+            run.text = new_text
+            changed = True
+    if changed:
+        return
+    full_text = "".join(r.text for r in par.runs)
+    new_text = repl_func(full_text)
+    if new_text == full_text:
+        return
+    if par.runs:
+        par.runs[0].text = new_text
+        for r in par.runs[1:]:
+            r.text = ""
 
-def replace_everywhere(doc,repl):
+def replace_everywhere(doc: Document, repl_func):
     for item in iter_block_items(doc):
-        if isinstance(item,Paragraph):
-            replace_in_paragraph(item,repl)
+        if isinstance(item, Paragraph):
+            replace_in_paragraph(item, repl_func)
+    for section in doc.sections:
+        for container in (section.header, section.footer):
+            for item in iter_block_items(container):
+                if isinstance(item, Paragraph):
+                    replace_in_paragraph(item, repl_func)
 
+# ----------------- Excel → 치환 콜백 -----------------
 def make_replacer(ws):
-    def repl(text):
+    def _repl(text: str) -> str:
         def sub(m):
-            addr,fmt=m.group(1),m.group(2)
-            try: v=ws[addr].value
-            except: v=None
-            return apply_inline_format(v,fmt)
-        return TOKEN_RE.sub(sub,text)
-    return repl
+            addr, fmt = m.group(1), m.group(2)
+            try:
+                v = ws[addr].value
+            except Exception:
+                v = None
+            return apply_inline_format(v, fmt)
+        replaced = TOKEN_RE.sub(sub, text)
 
-def convert_docx_to_pdf_bytes(docx_bytes):
+        # 템플릿에 남은 YYYY/MM/DD 류 더미를 오늘 날짜로 치환
+        sp = "    "
+        today = datetime.today()
+        today_str = f"{today.year}년{sp}{today.month}월{sp}{today.day}일"
+        for token in ["YYYY년 MM월 DD일", "YYYY년    MM월    DD일", "YYYY 년 MM 월 DD 일"]:
+            replaced = replaced.replace(token, today_str)
+        return replaced
+    return _repl
+
+# ----------------- DOCX → PDF -----------------
+def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> bytes | None:
     try:
         with tempfile.TemporaryDirectory() as td:
-            in_path=os.path.join(td,"doc.docx")
-            out_path=os.path.join(td,"doc.pdf")
-            open(in_path,"wb").write(docx_bytes)
-            if docx2pdf_convert:
+            in_path = os.path.join(td, "doc.docx")
+            out_path = os.path.join(td, "doc.pdf")
+            with open(in_path, "wb") as f:
+                f.write(docx_bytes)
+
+            if docx2pdf_convert is not None:
                 try:
-                    docx2pdf_convert(in_path,out_path)
-                    if os.path.exists(out_path): return open(out_path,"rb").read()
-                except: pass
+                    docx2pdf_convert(in_path, out_path)
+                    if os.path.exists(out_path):
+                        with open(out_path, "rb") as f:
+                            return f.read()
+                except Exception:
+                    pass
+
             if has_soffice():
                 try:
-                    subprocess.run(["soffice","--headless","--convert-to","pdf",in_path,"--outdir",td],check=True)
-                    if os.path.exists(out_path): return open(out_path,"rb").read()
-                except: pass
-    except: pass
+                    subprocess.run(
+                        ["soffice", "--headless", "--convert-to", "pdf", in_path, "--outdir", td],
+                        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                    )
+                    if os.path.exists(out_path):
+                        with open(out_path, "rb") as f:
+                            return f.read()
+                except Exception:
+                    pass
+    except Exception:
+        pass
     return None
 
-def collect_leftover_tokens(doc):
-    leftovers=set()
+# ----------------- 누락 토큰 수집 -----------------
+def collect_leftover_tokens(doc: Document) -> set[str]:
+    leftovers = set()
     for item in iter_block_items(doc):
-        if isinstance(item,Paragraph):
-            text="".join(r.text for r in item.runs)
-            leftovers |= set(LEFTOVER_RE.findall(text))
+        if isinstance(item, Paragraph):
+            text = "".join(r.text for r in item.runs) if item.runs else item.text
+            for m in LEFTOVER_RE.findall(text or ""):
+                leftovers.add(m)
+    for section in doc.sections:
+        for container in (section.header, section.footer):
+            for item in iter_block_items(container):
+                if isinstance(item, Paragraph):
+                    text = "".join(r.text for r in item.runs) if item.runs else item.text
+                    for m in LEFTOVER_RE.findall(text or ""):
+                        leftovers.add(m)
     return leftovers
 
-# ================================= UI ================================= #
+# ----------------- Streamlit UI -----------------
 st.set_page_config(page_title="납입요청서 자동 생성", page_icon="🧾", layout="wide")
+
+# 스타일 주입 (ui_style.py)
 inject_style()
 
 st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
 
-col_left, col_right = st.columns([1.2,1])
+col_left, col_right = st.columns([1.2, 1])
 
 with col_left:
-    open_div("upload-card excel-upload")
-    with st.form("input_form"):
-        xlsx_file = st.file_uploader("엑셀 파일", type=["xlsx","xlsm"])
-        docx_tpl  = st.file_uploader("워드 템플릿(.docx)", type=["docx"])
+    with st.form("input_form", clear_on_submit=False):
+        # Excel 업로더: Excel 시그니처 색 + 카드 레이아웃
+        open_div("excel-upload upload-card")
+        h4("엑셀 파일")
+        xlsx_file = st.file_uploader(" ", type=["xlsx", "xlsm"], accept_multiple_files=False)
+        close_div()
+
+        # Word 업로더: 기본 카드 레이아웃만 (원하면 word-upload 클래스를 추가해서 별도 테마 만들면 됨)
+        open_div("upload-card")
+        h4("워드 템플릿(.docx)")
+        docx_tpl = st.file_uploader("  ", type=["docx"], accept_multiple_files=False)
+        close_div()
+
         out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
-        if xlsx_file:
+
+        sheet_choice = None
+        if xlsx_file is not None:
             try:
-                wb_tmp=load_workbook(io.BytesIO(xlsx_file.getvalue()),data_only=True)
-                sheet_choice = st.selectbox("사용할 시트", wb_tmp.sheetnames)
-            except:
-                sheet_choice=None
-        else: sheet_choice=None
+                wb_tmp = load_workbook(filename=io.BytesIO(xlsx_file.getvalue()), data_only=True)
+                sheet_choice = st.selectbox(
+                    "사용할 시트",
+                    wb_tmp.sheetnames,
+                    index=wb_tmp.sheetnames.index(TARGET_SHEET) if TARGET_SHEET in wb_tmp.sheetnames else 0
+                )
+            except Exception:
+                st.warning("엑셀 미리보기 중 문제가 발생했습니다. 생성 시도는 가능합니다.")
+
         submitted = st.form_submit_button("문서 생성", use_container_width=True)
-    close_div()
 
 with col_right:
-    h4("안내")
-    st.markdown("- **{{A1}}**, **{{B7|YYYY.MM.DD}}**, **{{C3|#,###.00}}** 포맷 지원")
-    st.markdown("- PDF 변환은 Word 또는 LibreOffice 필요")
+    st.markdown("#### 안내")
+    st.markdown(
+        "- **{{A1}} / {{B7|YYYY.MM.DD}} / {{C3|#,###.00}}** 형식의 인라인 포맷을 지원합니다.\n"
+        "- **문서 생성**을 누르면 WORD와 PDF를 만들어 **개별 다운로드**와 **ZIP 묶음**을 제공합니다.\n"
+        "- PDF 변환은 **MS Word(docx2pdf)** 또는 **LibreOffice(soffice)** 가 설치된 환경에서 동작합니다.",
+    )
+    if 'docx_tpl' in locals() and docx_tpl is not None:
+        try:
+            doc_preview = Document(io.BytesIO(docx_tpl.getvalue()))
+            sample_tokens = set()
+            for p in doc_preview.paragraphs[:80]:
+                for m in re.findall(r"\{\{[^}]+\}\}", p.text or ""):
+                    if len(sample_tokens) < 12:
+                        sample_tokens.add(m)
+            if sample_tokens:
+                st.markdown("**템플릿 토큰 샘플**")
+                st.code(", ".join(list(sample_tokens)))
+            else:
+                st.caption("템플릿에서 토큰을 찾지 못했습니다.")
+        except Exception:
+            st.caption("템플릿 미리보기를 불러오지 못했습니다.")
 
+# ============ 생성 실행 ============
 if submitted:
     if not xlsx_file or not docx_tpl:
         st.error("엑셀과 템플릿을 모두 업로드하세요.")
         st.stop()
 
-    wb = load_workbook(io.BytesIO(xlsx_file.read()),data_only=True)
-    ws = wb[sheet_choice]
-    doc = Document(io.BytesIO(docx_tpl.read()))
-    replace_everywhere(doc, make_replacer(ws))
+    with st.status("문서 생성 중...", expanded=True) as status:
+        try:
+            st.write("1) 엑셀 로드")
+            wb = load_workbook(filename=io.BytesIO(xlsx_file.read()), data_only=True)
+            ws = wb[sheet_choice] if sheet_choice else (
+                wb[TARGET_SHEET] if TARGET_SHEET in wb.sheetnames else wb[wb.sheetnames[0]]
+            )
 
-    buf=io.BytesIO(); doc.save(buf); buf.seek(0); docx_bytes = buf.getvalue()
-    pdf_bytes = convert_docx_to_pdf_bytes(docx_bytes)
-    leftovers = collect_leftover_tokens(Document(io.BytesIO(docx_bytes)))
+            st.write("2) 템플릿 로드")
+            tpl_bytes = docx_tpl.read()
+            doc = Document(io.BytesIO(tpl_bytes))
 
-    st.success("문서 생성 완료")
+            st.write("3) 치환 실행")
+            replacer = make_replacer(ws)
+            replace_everywhere(doc, replacer)
 
-    c1,c2,c3 = st.columns(3)
-    c1.download_button("📄 WORD", docx_bytes, file_name=ensure_docx(out_name))
-    c2.download_button("🖨 PDF", pdf_bytes or b"", file_name=ensure_pdf(out_name), disabled=(pdf_bytes is None))
-    z=io.BytesIO()
-    with ZipFile(z,"w",ZIP_DEFLATED) as f:
-        f.writestr(ensure_docx(out_name),docx_bytes)
-        if pdf_bytes: f.writestr(ensure_pdf(out_name),pdf_bytes)
-    z.seek(0)
-    c3.download_button("📦 ZIP", z, file_name="export.zip")
+            st.write("4) WORD 저장")
+            docx_buf = io.BytesIO()
+            doc.save(docx_buf)
+            docx_buf.seek(0)
+            docx_bytes = docx_buf.getvalue()
+
+            st.write("5) PDF 변환 시도")
+            pdf_bytes = convert_docx_to_pdf_bytes(docx_bytes)
+            pdf_ok = pdf_bytes is not None
+
+            st.write("6) 남은 토큰 확인")
+            doc_after = Document(io.BytesIO(docx_bytes))
+            leftovers = sorted(list(collect_leftover_tokens(doc_after)))
+
+            status.update(label="완료", state="complete", expanded=False)
+        except Exception as e:
+            status.update(label="오류", state="error", expanded=True)
+            st.exception(e)
+            st.stop()
+
+    st.success("문서가 준비되었습니다.")
+    dl_cols = st.columns(3)
+    with dl_cols[0]:
+        st.download_button(
+            "📄 WORD 다운로드",
+            data=docx_bytes,
+            file_name=ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT,
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True,
+        )
+    with dl_cols[1]:
+        st.download_button(
+            "🖨 PDF 다운로드",
+            data=pdf_bytes if pdf_ok else b"",
+            file_name=ensure_pdf(out_name),
+            mime="application/pdf",
+            disabled=not pdf_ok,
+            help=None if pdf_ok else "PDF 변환 엔진(Word 또는 LibreOffice)이 없는 환경입니다.",
+            use_container_width=True,
+        )
+    with dl_cols[2]:
+        zip_buf = io.BytesIO()
+        with ZipFile(zip_buf, "w", ZIP_DEFLATED) as zf:
+            zf.writestr(ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT, docx_bytes)
+            if pdf_ok:
+                zf.writestr(ensure_pdf(out_name), pdf_bytes)
+        zip_buf.seek(0)
+        st.download_button(
+            "📦 ZIP (WORD+PDF)",
+            data=zip_buf,
+            file_name=(ensure_pdf(out_name).replace(".pdf", "") + "_both.zip"),
+            mime="application/zip",
+            use_container_width=True,
+        )
 
     if leftovers:
-        st.warning("템플릿에 남아있는 토큰: " + ", ".join(leftovers))
+        with st.expander("템플릿에 남아있는 토큰"):
+            st.write(", ".join(leftovers))
+    else:
+        st.caption("모든 토큰이 치환되었습니다.")
