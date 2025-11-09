@@ -2,13 +2,11 @@
 import io
 import os
 import re
-import sys
 import shutil
 import tempfile
 import subprocess
 from datetime import datetime, date
 from decimal import Decimal
-import platform
 
 import streamlit as st
 from openpyxl import load_workbook
@@ -16,16 +14,22 @@ from docx import Document
 from docx.table import _Cell
 from docx.text.paragraph import Paragraph
 
-# (선택) 윈도우/맥에서만 유효. 리눅스에선 실패함.
+# 선택적 의존성: 있으면 사용
+try:
+    import aspose.words as aw
+    HAS_ASPOSE = True
+except Exception:
+    HAS_ASPOSE = False
+
 try:
     from docx2pdf import convert as docx2pdf_convert
+    HAS_DOCX2PDF = True
 except Exception:
-    docx2pdf_convert = None
+    HAS_DOCX2PDF = False
 
-PLACEHOLDER_RE = re.compile(r"\{\{([A-Z]+[0-9]+)\}\}")   # {{A1}}, {{B7}} ...
+PLACEHOLDER_RE = re.compile(r"\{\{([A-Z]+[0-9]+)\}\}")
 DEFAULT_OUT = f"{datetime.today():%Y%m%d}_#_납입요청서_DB저축은행.docx"
 TARGET_SHEET = "2.  배정후 청약시"
-do_strict = False  # 정의 누락되어 있어 기본값 추가
 
 # ---------- 유틸 ----------
 def ensure_docx(name: str) -> str:
@@ -34,11 +38,10 @@ def ensure_docx(name: str) -> str:
 
 def ensure_pdf(name: str) -> str:
     name = (name or "").strip()
-    if name.lower().endswith(".docx"):
-        name = name[:-5]
-    return (name + ".pdf") if not name.lower().endswith(".pdf") else name
+    base = name[:-5] if name.lower().endswith(".docx") else name
+    return f"{base}.pdf"
 
-# ---------- 값 포맷 함수 ----------
+# ---------- 값 포맷 ----------
 def force_font(doc, font_name="한컴바탕"):
     for p in doc.paragraphs:
         for r in p.runs:
@@ -84,9 +87,8 @@ def value_to_text(v) -> str:
         return s
     return "" if v is None else str(v)
 
-# ---------- 문서 치환 유틸 ----------
+# ---------- 문서 치환 ----------
 def iter_block_items(parent):
-    """문서의 문단/표 셀 모두 순회 (본문, 헤더/푸터 공통 사용)."""
     if hasattr(parent, "element") and hasattr(parent, "paragraphs"):
         for p in parent.paragraphs:
             yield p
@@ -135,7 +137,6 @@ def replace_everywhere(doc: Document, repl_func):
 # ---------- Excel → 치환 콜백 ----------
 def make_replacer(ws):
     def _repl(text: str) -> str:
-        # 1) {{A1}} 같은 토큰 치환
         def cell_sub(m):
             addr = m.group(1)
             try:
@@ -146,76 +147,71 @@ def make_replacer(ws):
 
         replaced = PLACEHOLDER_RE.sub(cell_sub, text)
 
-        # 2) 날짜 템플릿 치환 (년/월/일 사이 공백 4칸)
         sp = "    "
         today = datetime.today()
         today_str = f"{today.year}년{sp}{today.month}월{sp}{today.day}일"
-        for token in [
-            "YYYY년 MM월 DD일",
-            "YYYY년    MM월    DD일",
-            "YYYY 년 MM 월 DD 일",
-        ]:
+        for token in ["YYYY년 MM월 DD일", "YYYY년    MM월    DD일", "YYYY 년 MM 월 DD 일"]:
             replaced = replaced.replace(token, today_str)
         return replaced
     return _repl
 
-# ---------- PDF 변환 유틸 ----------
-def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> bytes | None:
+# ---------- DOCX → PDF (바이트 변환) ----------
+def docx_bytes_to_pdf_bytes(docx_bytes: bytes) -> bytes | None:
     """
-    가능한 경우 DOCX → PDF 바이트 반환.
-    우선순위:
-      1) Windows/Mac + docx2pdf (MS Word 필요)
-      2) soffice (LibreOffice) 헤드리스
-    둘 다 불가하면 None.
+    가능한 방법 순서:
+    1) aspose-words
+    2) Windows + docx2pdf (MS Word)
+    3) soffice(headless)
+    실패 시 None
     """
-    system = platform.system().lower()
+    # 1) Aspose
+    if HAS_ASPOSE:
+        try:
+            in_stream = io.BytesIO(docx_bytes)
+            adoc = aw.Document(in_stream)
+            out_stream = io.BytesIO()
+            adoc.save(out_stream, aw.SaveFormat.PDF)
+            return out_stream.getvalue()
+        except Exception:
+            pass
 
-    # 임시 디렉터리에서 작업
-    with tempfile.TemporaryDirectory() as tmpdir:
-        in_path = os.path.join(tmpdir, "input.docx")
-        out_pdf = os.path.join(tmpdir, "output.pdf")
-        with open(in_path, "wb") as f:
-            f.write(docx_bytes)
+    # 2) Windows + docx2pdf
+    if os.name == "nt" and HAS_DOCX2PDF:
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                in_path = os.path.join(td, "temp.docx")
+                out_path = os.path.join(td, "temp.pdf")
+                with open(in_path, "wb") as f:
+                    f.write(docx_bytes)
+                docx2pdf_convert(in_path, out_path)
+                with open(out_path, "rb") as f:
+                    return f.read()
+        except Exception:
+            pass
 
-        # 1) Windows/Mac에서 docx2pdf 시도
-        if docx2pdf_convert and system in ("windows", "darwin"):
-            try:
-                # docx2pdf는 in_path/out_dir 단위로 동작
-                docx2pdf_convert(in_path, tmpdir)
-                if os.path.exists(out_pdf):
-                    with open(out_pdf, "rb") as f:
-                        return f.read()
-            except Exception:
-                pass  # 실패 시 아래 경로로 폴백
-
-        # 2) LibreOffice(soffice) 시도 (리눅스/윈도우/맥 모두 가능하나 설치필요)
-        soffice = shutil.which("soffice") or shutil.which("libreoffice")
-        if soffice:
-            try:
-                # --headless --convert-to pdf --outdir <tmpdir> <in_path>
+    # 3) soffice (LibreOffice)
+    soffice = shutil.which("soffice") or shutil.which("libreoffice")
+    if soffice:
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                in_path = os.path.join(td, "temp.docx")
+                with open(in_path, "wb") as f:
+                    f.write(docx_bytes)
                 cmd = [
-                    soffice,
-                    "--headless",
-                    "--nologo",
-                    "--nofirststartwizard",
-                    "--convert-to", "pdf",
-                    "--outdir", tmpdir,
-                    in_path,
+                    soffice, "--headless", "--nologo", "--nofirststartwizard",
+                    "--convert-to", "pdf", "--outdir", td, in_path
                 ]
                 subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                if os.path.exists(out_pdf):
-                    with open(out_pdf, "rb") as f:
+                out_path = os.path.join(td, "temp.pdf")
+                if os.path.exists(out_path):
+                    with open(out_path, "rb") as f:
                         return f.read()
-            except Exception as e:
-                # 변환 실패
-                print(f"[WARN] soffice conversion failed: {e}", file=sys.stderr)
+        except Exception:
+            pass
 
-        # 변환 불가
-        return None
+    return None
 
 # ---------- Streamlit UI ----------
-st.title("납입요청서 DOCX/PDF 생성기")
-
 xlsx_file = st.file_uploader("엑셀 파일(.xlsx, .xlsm)", type=["xlsx", "xlsm"])
 docx_tpl = st.file_uploader("워드 템플릿(.docx)", type=["docx"])
 
@@ -231,62 +227,46 @@ if run:
         st.stop()
 
     try:
-        # Excel 로드
+        # Excel
         wb = load_workbook(filename=io.BytesIO(xlsx_file.read()), data_only=True)
         sheet_names = wb.sheetnames
-        if TARGET_SHEET in sheet_names:
-            ws = wb[TARGET_SHEET]
-        else:
-            if do_strict:
-                st.error(f"시트 '{TARGET_SHEET}' 를 찾지 못했습니다.")
-                st.stop()
-            ws = wb[sheet_names[0]]
+        ws = wb[TARGET_SHEET] if TARGET_SHEET in sheet_names else wb[sheet_names[0]]
 
-        # Word 템플릿 로드
+        # Word 템플릿 로드 & 치환
         tpl_bytes = docx_tpl.read()
         doc = Document(io.BytesIO(tpl_bytes))
-
-        # 치환 실행
         replacer = make_replacer(ws)
         replace_everywhere(doc, replacer)
-        # (선택) 폰트 강제
+        # 필요시 폰트 강제
         # force_font(doc, "한컴바탕")
 
-        # 결과 DOCX 저장 (메모리)
+        # DOCX 결과 저장(메모리)
         docx_buf = io.BytesIO()
         doc.save(docx_buf)
         docx_buf.seek(0)
+        docx_filename = ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT
+        pdf_filename = ensure_pdf(docx_filename)
 
-        # 파일명 처리
-        docx_name = ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT
-        pdf_name = ensure_pdf(out_name if out_name.strip() else DEFAULT_OUT)
-
-        # PDF 변환 시도
-        pdf_bytes = convert_docx_to_pdf_bytes(docx_buf.getvalue())
-
-        st.success("완료되었습니다.")
-        # DOCX 다운로드
+        st.success("DOCX 생성 완료")
         st.download_button(
             label="DOCX 다운로드",
-            data=docx_buf,
-            file_name=docx_name,
+            data=docx_buf.getvalue(),
+            file_name=docx_filename,
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
 
-        # PDF 다운로드(성공 시)
-        if pdf_bytes is not None:
+        # PDF 변환 시도
+        pdf_bytes = docx_bytes_to_pdf_bytes(docx_buf.getvalue())
+        if pdf_bytes:
+            st.success("PDF 변환 완료")
             st.download_button(
                 label="PDF 다운로드",
                 data=pdf_bytes,
-                file_name=pdf_name,
+                file_name=pdf_filename,
                 mime="application/pdf",
             )
         else:
-            st.info(
-                "PDF 변환을 건너뛰었습니다. "
-                "원격/가상환경에서는 **LibreOffice(soffice)** 설치가 필요합니다. "
-                "도커 예시: `apt-get update && apt-get install -y libreoffice`"
-            )
+            st.info("PDF 변환 환경이 없어 DOCX만 제공합니다. (aspose-words 설치 또는 로컬/서버에 MS Word 또는 LibreOffice 필요)")
 
     except Exception as e:
         st.exception(e)
