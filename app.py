@@ -237,13 +237,6 @@ with col_left:
 
         submitted = st.form_submit_button("문서 생성", use_container_width=True)
 
-with col_right:
-    st.markdown("#### 안내")
-    st.markdown(
-        "- **{{A1}} / {{B7|YYYY.MM.DD}} / {{C3|#,###.00}}** 형식의 인라인 포맷을 지원합니다.\n"
-        "- **문서 생성**을 누르면 WORD와 PDF를 만들어 **개별 다운로드**와 **ZIP 묶음**을 제공합니다.\n"
-        "- PDF 변환은 **MS Word(docx2pdf)** 또는 **LibreOffice(soffice)** 가 설치된 환경에서 동작합니다.",
-    )
     if st.session_state.get("docx_preview_shown") is None:
         st.session_state["docx_preview_shown"] = True
 
