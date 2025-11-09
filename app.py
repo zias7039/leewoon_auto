@@ -2,7 +2,6 @@
 import io
 import os
 import re
-import sys
 import tempfile
 import subprocess
 from datetime import datetime, date
@@ -15,19 +14,19 @@ from docx import Document
 from docx.table import _Cell
 from docx.text.paragraph import Paragraph
 
-# 선택: docx2pdf가 있으면 활용 (Windows+Word)
+# 선택: docx2pdf가 있으면 활용
 try:
     from docx2pdf import convert as docx2pdf_convert
 except Exception:
     docx2pdf_convert = None
 
-# ===================== 설정/상수 =====================
-PLACEHOLDER_RE = re.compile(r"\{\{([A-Z]+[0-9]+)(?:\|([^}]+))?\}\}")  # {{A1}} or {{A1|#,###}} or {{B7|YYYY.MM.DD}}
-RAW_TOKEN_RE   = re.compile(r"\{\{[^}]+\}\}")
-TARGET_SHEET_DEFAULT = "2.  배정후 청약시"
+# ----------------- 상수 -----------------
+TOKEN_RE = re.compile(r"\{\{([A-Z]+[0-9]+)(?:\|([^}]+))?\}\}")  # {{A1}} or {{A1|FORMAT}}
+LEFTOVER_RE = re.compile(r"\{\{[^}]+\}\}")
 DEFAULT_OUT = f"{datetime.today():%Y%m%d}_#_납입요청서_DB저축은행.docx"
+TARGET_SHEET = "2.  배정후 청약시"
 
-# ===================== 유틸 =====================
+# ----------------- 유틸 -----------------
 def ensure_docx(name: str) -> str:
     name = (name or "").strip()
     return name if name.lower().endswith(".docx") else (name + ".docx")
@@ -39,115 +38,98 @@ def ensure_pdf(name: str) -> str:
     return base + ".pdf"
 
 def has_soffice() -> bool:
-    paths = os.environ.get("PATH", "").split(os.pathsep)
     return any(
         os.path.isfile(os.path.join(p, "soffice")) or os.path.isfile(os.path.join(p, "soffice.bin"))
-        for p in paths
+        for p in os.environ.get("PATH", "").split(os.pathsep)
     )
 
-def coerce_date(val):
-    if val is None:
-        return None
-    if isinstance(val, (datetime, date)):
-        return val
-    s = str(val).strip()
-    for fmt in ("%Y-%m-%d", "%Y.%m.%d", "%Y/%m/%d"):
-        try:
-            return datetime.strptime(s, fmt)
-        except Exception:
-            pass
-    return None
-
-def format_by_pattern(value, pattern, thousands_sep=",", decimal_sep="."):
-    """
-    pattern:
-      - 날짜: 'YYYY.MM.DD', 'YYYY-MM-DD', 'YYYY년 MM월 DD일' 등
-      - 숫자: '#,###', '#,###.0', '#,###.00' 등 (자리수 0 개수로 소수 자릿수 결정)
-    """
-    # 날짜 패턴 감지
-    if any(k in pattern for k in ("YYYY", "YY")):
-        dt = coerce_date(value)
-        if not dt:
-            return ""
-        # 토큰 치환용
-        y = f"{dt.year:04d}"
-        yy = f"{dt.year % 100:02d}"
-        m = f"{dt.month:02d}"
-        d = f"{dt.day:02d}"
-        out = (pattern
-               .replace("YYYY", y)
-               .replace("YY", yy)
-               .replace("MM", m)
-               .replace("DD", d))
-        return out
-
-    # 숫자 패턴
-    # 기본 소수 자릿수 추출
-    decimals = 0
-    if "." in pattern:
-        decimals = pattern.split(".")[1].count("0")  # '#,###.00' -> 2
-    # 값 파싱
+def try_format_as_date(v) -> str:
     try:
-        if isinstance(value, (int, float, Decimal)):
-            num = float(value)
-        else:
-            raw = str(value).replace(",", "").replace(" ", "")
-            num = float(raw)
+        if v is None:
+            return ""
+        if isinstance(v, (datetime, date)):
+            return f"{v.year}. {v.month}. {v.day}."
+        s = str(v).strip()
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+            dt = datetime.strptime(s, "%Y-%m-%d").date()
+            return f"{dt.year}. {dt.month}. {dt.day}."
     except Exception:
-        return ""
-    # 기본 포맷은 python 포맷 사용(, . 고정) → 후처리로 로케일 구분자 적용
-    py_fmt = f"{{:,.{decimals}f}}"
-    s = py_fmt.format(num)
-    if thousands_sep != "," or decimal_sep != ".":
-        s = s.replace(",", "§").replace(".", "¤")
-        s = s.replace("§", thousands_sep).replace("¤", decimal_sep)
-    # 소수 0 제거 옵션이 필요하면 여기서 trim 가능(요청 시)
-    return s
+        pass
+    return ""
 
-def value_to_text(v, thousands_sep=",", decimal_sep="."):
-    # 날짜 우선
-    dt = coerce_date(v)
-    if dt:
-        return f"{dt.year}. {dt.month}. {dt.day}."
-    # 숫자
+def fmt_number(v) -> str:
     try:
         if isinstance(v, (int, float, Decimal)):
-            s = f"{v:,.0f}"
-        else:
-            raw = str(v).replace(",", "")
+            return f"{float(v):,.0f}"
+        if isinstance(v, str):
+            raw = v.replace(",", "")
             if re.fullmatch(r"-?\d+(\.\d+)?", raw):
-                s = f"{float(raw):,.0f}"
-            else:
-                return "" if v is None else str(v)
-        if thousands_sep != "," or decimal_sep != ".":
-            s = s.replace(",", thousands_sep).replace(".", decimal_sep)
-        return s
+                return f"{float(raw):,.0f}"
     except Exception:
-        return "" if v is None else str(v)
+        pass
+    return ""
 
-# ===================== 문서 순회/치환 =====================
-def iter_block_items(container):
+def value_to_text(v) -> str:
+    s = try_format_as_date(v)
+    if s:
+        return s
+    s = fmt_number(v)
+    if s:
+        return s
+    return "" if v is None else str(v)
+
+# ----------------- 포맷 적용 -----------------
+def apply_inline_format(value, fmt: str | None) -> str:
     """
-    python-docx 객체를 안전하게 순회 (본문/헤더/푸터/표 셀 재귀)
-    - Document 클래스를 isinstance로 검사하지 않고 duck-typing으로 처리
+    {{A1|#,###}}, {{B7|YYYY.MM.DD}} 형태의 포맷을 간단 지원.
+    - 날짜 포맷: YYYY -> %Y, MM -> %m, DD -> %d
+    - 숫자 포맷: '#,###' / '#,###.00' 식 → 그룹핑 + 소수 자릿수
     """
-    # Paragraph 리스트
-    if hasattr(container, "paragraphs"):
-        for p in container.paragraphs:
+    if fmt is None or fmt.strip() == "":
+        return value_to_text(value)
+
+    # 날짜 포맷 감지
+    if any(tok in fmt for tok in ("YYYY", "MM", "DD")):
+        # 값이 문자열이어도 'YYYY-MM-DD'면 날짜로 파싱
+        if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip()):
+            value = datetime.strptime(value.strip(), "%Y-%m-%d").date()
+        if isinstance(value, (datetime, date)):
+            f = fmt
+            f = f.replace("YYYY", "%Y").replace("MM", "%m").replace("DD", "%d")
+            return value.strftime(f)
+        return value_to_text(value)
+
+    # 숫자 포맷 간이 처리
+    if re.fullmatch(r"[#,0]+(?:\.[0#]+)?", fmt.replace(",", "")):
+        try:
+            num = float(str(value).replace(",", ""))
+            # 소수점 자릿수 계산
+            decimals = 0
+            if "." in fmt:
+                decimals = len(fmt.split(".")[1])
+            return f"{num:,.{decimals}f}"
+        except Exception:
+            return value_to_text(value)
+
+    # 그 외는 기본 변환
+    return value_to_text(value)
+
+# ----------------- 문서 순회/치환 -----------------
+def iter_block_items(parent):
+    """문서의 문단/표 셀 모두 순회 (본문, 헤더/푸터 공통 사용)."""
+    # python-docx 타입 체크 대신 duck-typing으로 안전 처리
+    if hasattr(parent, "paragraphs") and hasattr(parent, "tables"):
+        for p in parent.paragraphs:
             yield p
-    # Tables 재귀
-    if hasattr(container, "tables"):
-        for t in container.tables:
+        for t in parent.tables:
             for row in t.rows:
                 for cell in row.cells:
-                    # _Cell인 경우에도 동일 로직 재귀
                     for item in iter_block_items(cell):
                         yield item
-    # _Cell 방어: (위에서 이미 처리되지만 안전망)
-    if isinstance(container, _Cell):
-        for p in container.paragraphs:
+    elif isinstance(parent, _Cell):
+        for p in parent.paragraphs:
             yield p
-        for t in container.tables:
+        for t in parent.tables:
             for row in t.rows:
                 for cell in row.cells:
                     for item in iter_block_items(cell):
@@ -162,80 +144,48 @@ def replace_in_paragraph(par: Paragraph, repl_func):
             changed = True
     if changed:
         return
-    # run 쪼개짐 케이스: 문단 단위 재치환
     full_text = "".join(r.text for r in par.runs)
     new_text = repl_func(full_text)
-    if new_text != full_text and par.runs:
+    if new_text == full_text:
+        return
+    if par.runs:
         par.runs[0].text = new_text
         for r in par.runs[1:]:
             r.text = ""
 
 def replace_everywhere(doc: Document, repl_func):
-    # 본문
     for item in iter_block_items(doc):
         if isinstance(item, Paragraph):
             replace_in_paragraph(item, repl_func)
-    # 헤더/푸터
     for section in doc.sections:
         for container in (section.header, section.footer):
             for item in iter_block_items(container):
                 if isinstance(item, Paragraph):
                     replace_in_paragraph(item, repl_func)
 
-def collect_raw_tokens(doc: Document):
-    """치환 후 템플릿에 남아있는 {{...}} 토큰 수집"""
-    found = set()
-    def scan(container):
-        if hasattr(container, "paragraphs"):
-            for p in container.paragraphs:
-                for m in RAW_TOKEN_RE.findall(p.text or ""):
-                    found.add(m)
-        if hasattr(container, "tables"):
-            for t in container.tables:
-                for row in t.rows:
-                    for cell in row.cells:
-                        scan(cell)
-    scan(doc)
-    for section in doc.sections:
-        for container in (section.header, section.footer):
-            scan(container)
-    return sorted(found)
-
-# ===================== Excel → 치환 콜백 =====================
-def make_replacer(ws, thousands_sep=",", decimal_sep=".", strict_missing_cell=False):
+# ----------------- Excel → 치환 콜백 -----------------
+def make_replacer(ws):
     def _repl(text: str) -> str:
-        def cell_sub(m):
+        def sub(m):
             addr, fmt = m.group(1), m.group(2)
             try:
                 v = ws[addr].value
             except Exception:
                 v = None
-                if strict_missing_cell:
-                    # 엄격 모드: 없는 셀 발견 시 빈문자 대신 명확히 표시
-                    return f"<!MISS:{addr}!>"
-            if fmt:  # 인라인 포맷 파이프
-                return format_by_pattern(v, fmt, thousands_sep, decimal_sep)
-            return value_to_text(v, thousands_sep, decimal_sep)
+            return apply_inline_format(v, fmt)
+        replaced = TOKEN_RE.sub(sub, text)
 
-        replaced = PLACEHOLDER_RE.sub(cell_sub, text)
-
-        # 보너스: 흔한 'YYYY년    MM월    DD일' 같은 고정 텍스트 치환
+        # YYYY/MM/DD 같은 더미 템플릿 치환(간단)
         sp = "    "
         today = datetime.today()
         today_str = f"{today.year}년{sp}{today.month}월{sp}{today.day}일"
-        for token in ("YYYY년 MM월 DD일", "YYYY년    MM월    DD일", "YYYY 년 MM 월 DD 일"):
+        for token in ["YYYY년 MM월 DD일", "YYYY년    MM월    DD일", "YYYY 년 MM 월 DD 일"]:
             replaced = replaced.replace(token, today_str)
         return replaced
     return _repl
 
-# ===================== DOCX → PDF =====================
+# ----------------- DOCX → PDF -----------------
 def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> bytes | None:
-    """
-    가능한 경우 PDF로 변환해 bytes 반환.
-    1) Windows + MS Word: docx2pdf
-    2) soffice(libreooffice) 있으면 headless 변환
-    실패 시 None
-    """
     try:
         with tempfile.TemporaryDirectory() as td:
             in_path = os.path.join(td, "doc.docx")
@@ -243,107 +193,95 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> bytes | None:
             with open(in_path, "wb") as f:
                 f.write(docx_bytes)
 
-            # 1) docx2pdf
+            # 1) Word (Windows) 경로
             if docx2pdf_convert is not None:
                 try:
                     docx2pdf_convert(in_path, out_path)
                     if os.path.exists(out_path):
-                        return open(out_path, "rb").read()
+                        with open(out_path, "rb") as f:
+                            return f.read()
                 except Exception:
                     pass
 
-            # 2) LibreOffice
+            # 2) LibreOffice headless
             if has_soffice():
                 try:
-                    cmd = ["soffice", "--headless", "--convert-to", "pdf", in_path, "--outdir", td]
-                    subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    subprocess.run(
+                        ["soffice", "--headless", "--convert-to", "pdf", in_path, "--outdir", td],
+                        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                    )
                     if os.path.exists(out_path):
-                        return open(out_path, "rb").read()
+                        with open(out_path, "rb") as f:
+                            return f.read()
                 except Exception:
                     pass
     except Exception:
         pass
     return None
 
-# ===================== Streamlit UI =====================
+# ----------------- 누락 토큰 수집 -----------------
+def collect_leftover_tokens(doc: Document) -> set[str]:
+    leftovers = set()
+    for item in iter_block_items(doc):
+        if isinstance(item, Paragraph):
+            text = "".join(r.text for r in item.runs) if item.runs else item.text
+            for m in LEFTOVER_RE.findall(text or ""):
+                leftovers.add(m)
+    for section in doc.sections:
+        for container in (section.header, section.footer):
+            for item in iter_block_items(container):
+                if isinstance(item, Paragraph):
+                    text = "".join(r.text for r in item.runs) if item.runs else item.text
+                    for m in LEFTOVER_RE.findall(text or ""):
+                        leftovers.add(m)
+    return leftovers
+
+# ----------------- Streamlit UI -----------------
 st.title("납입요청서 자동 생성 (DOCX + PDF)")
 
 xlsx_file = st.file_uploader("엑셀 파일(.xlsx, .xlsm)", type=["xlsx", "xlsm"])
-docx_tpl  = st.file_uploader("워드 템플릿(.docx)", type=["docx"])
-
-# 사이드바: 옵션
-with st.sidebar:
-    st.subheader("옵션")
-    thousands_sep = st.selectbox("천단위 구분자", [",", ".", " "], index=0)
-    decimal_sep   = st.selectbox("소수점 구분자", [".", ","], index=0)
-    strict_mode   = st.checkbox("엄격 모드 (시트/토큰 오류 시 중단)", value=False)
-    strict_missing_cell = st.checkbox("엄격: 누락 셀 마킹(<!MISS:AXX!>)", value=False)
-    st.caption("인라인 포맷 예: {{A1|#,###}}, {{B7|#,###.00}}, {{C3|YYYY.MM.DD}}")
+docx_tpl = st.file_uploader("워드 템플릿(.docx)", type=["docx"])
 
 out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
 
-# Excel 시트 선택
-selected_sheet = None
+# 시트 선택(간단 드롭다운)
+sheet_choice = None
 if xlsx_file:
-    try:
-        wb_probe = load_workbook(filename=io.BytesIO(xlsx_file.getvalue()), data_only=True, read_only=True)
-        sheets = wb_probe.sheetnames
-        default_idx = sheets.index(TARGET_SHEET_DEFAULT) if TARGET_SHEET_DEFAULT in sheets else 0
-        selected_sheet = st.selectbox("데이터 시트 선택", sheets, index=default_idx)
-    except Exception as e:
-        st.warning(f"시트 정보를 읽는 중 문제가 발생했습니다: {e}")
+    wb_tmp = load_workbook(filename=io.BytesIO(xlsx_file.getvalue()), data_only=True)
+    st.write("시트 선택")
+    sheet_choice = st.selectbox("Excel 시트", wb_tmp.sheetnames,
+                                index=wb_tmp.sheetnames.index(TARGET_SHEET) if TARGET_SHEET in wb_tmp.sheetnames else 0)
 
-# 액션 버튼
-if st.button("문서 생성"):
+run = st.button("문서 생성")
+
+if run:
     if not xlsx_file or not docx_tpl:
         st.error("엑셀 파일과 워드 템플릿을 모두 업로드하세요.")
         st.stop()
 
     try:
-        # ---- Excel 로드
-        wb = load_workbook(filename=io.BytesIO(xlsx_file.getvalue()), data_only=True)
-        sheet_names = wb.sheetnames
-        if selected_sheet and selected_sheet in sheet_names:
-            ws = wb[selected_sheet]
-        else:
-            if TARGET_SHEET_DEFAULT in sheet_names:
-                ws = wb[TARGET_SHEET_DEFAULT]
-            else:
-                if strict_mode:
-                    st.error(f"시트 '{TARGET_SHEET_DEFAULT}'를 찾을 수 없습니다.")
-                    st.stop()
-                ws = wb[sheet_names[0]]
+        # Excel 로드
+        wb = load_workbook(filename=io.BytesIO(xlsx_file.read()), data_only=True)
+        ws = wb[sheet_choice] if sheet_choice else (wb[TARGET_SHEET] if TARGET_SHEET in wb.sheetnames else wb[wb.sheetnames[0]])
 
-        # ---- DOCX 템플릿 로드
-        tpl_bytes = docx_tpl.getvalue()
+        # Word 템플릿 로드
+        tpl_bytes = docx_tpl.read()
         doc = Document(io.BytesIO(tpl_bytes))
 
-        # ---- 치환
-        replacer = make_replacer(ws, thousands_sep, decimal_sep, strict_missing_cell)
+        # 치환
+        replacer = make_replacer(ws)
         replace_everywhere(doc, replacer)
 
-        # ---- 남은 토큰 리포트
-        leftover = collect_raw_tokens(doc)
-        with st.sidebar:
-            st.subheader("남은 토큰")
-            if leftover:
-                st.code("\n".join(leftover))
-                if strict_mode:
-                    st.error("엄격 모드: 남은 토큰이 있어 중단합니다.")
-                    st.stop()
-            else:
-                st.caption("모든 토큰이 치환되었습니다.")
-
-        # ---- DOCX 메모리 저장
+        # DOCX 메모리 저장
         docx_buf = io.BytesIO()
         doc.save(docx_buf)
         docx_buf.seek(0)
         docx_bytes = docx_buf.getvalue()
 
-        # ---- PDF 변환 시도
+        # PDF 변환 시도
         pdf_bytes = convert_docx_to_pdf_bytes(docx_bytes)
 
-        # ---- ZIP 묶기 (DOCX + 가능하면 PDF)
+        # ZIP 묶기
         zip_buf = io.BytesIO()
         with ZipFile(zip_buf, "w", ZIP_DEFLATED) as zf:
             zf.writestr(ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT, docx_bytes)
@@ -351,7 +289,14 @@ if st.button("문서 생성"):
                 zf.writestr(ensure_pdf(out_name), pdf_bytes)
         zip_buf.seek(0)
 
-        # ---- 다운로드
+        # 누락 토큰 리포트(정보용)
+        doc_after = Document(io.BytesIO(docx_bytes))
+        leftovers = sorted(list(collect_leftover_tokens(doc_after)))
+        if leftovers:
+            with st.expander("템플릿에 남은 치환 토큰(참고용)"):
+                st.write(", ".join(leftovers))
+
+        # 다운로드
         st.success("완료되었습니다.")
         st.download_button(
             "WORD+PDF 한번에 다운로드 (ZIP)",
