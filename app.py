@@ -1,5 +1,3 @@
-# invoicegen/app.py
-# -*- coding: utf-8 -*-
 import io
 from datetime import datetime
 import streamlit as st
