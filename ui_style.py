@@ -1,9 +1,34 @@
 # ui_style.py
 import streamlit as st
 
+EXCEL_GREEN = "#217346"   # Microsoft Excel Signature Green
 BASE_CSS = """
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
+
+/* Excel 테마 드롭존 */
+.excel-upload [data-testid="stFileUploaderDropzone"] {
+  border: 1px solid color-mix(in srgb, var(--excel-green) 70%, white);
+  background: color-mix(in srgb, var(--excel-green) 12%, transparent);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+}
+
+.excel-upload [data-testid="stFileUploaderDropzone"] p,
+.excel-upload [data-testid="stFileUploaderDropzone"] span {
+  color: color-mix(in srgb, var(--excel-green) 85%, white);
+}
+
+.excel-upload [data-testid="stFileUploader"] button {
+  background: var(--excel-green);
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--excel-green) 60%, white);
+  color: white;
+}
+.excel-upload [data-testid="stFileUploader"] button:hover {
+  filter: brightness(1.08);
+}
+
 
 .block-container {padding-top: 1.2rem;}
 
@@ -40,6 +65,13 @@ footer {visibility: hidden;}
 """
 
 def inject():
+    st.markdown("""
+    <style>
+      :root {
+        --excel-green: #217346;
+      }
+    </style>
+    """, unsafe_allow_html=True)
     st.markdown(f"<style>{BASE_CSS}</style>", unsafe_allow_html=True)
 
 def open_div(cls=""):
