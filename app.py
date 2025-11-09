@@ -7,7 +7,7 @@ from docx import Document
 
 from constants import DEFAULT_OUT, TARGET_SHEET
 from services.utils.excel_tools import load_wb_and_guess_sheet
-from utils.paths import ensure_docx, ensure_pdf
+from services.utils.paths import ensure_docx, ensure_pdf
 from services.generator import generate_documents
 
 st.set_page_config(page_title="납입요청서 자동 생성", page_icon="🧾", layout="wide")
