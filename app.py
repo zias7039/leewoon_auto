@@ -285,6 +285,41 @@ div[data-testid="stForm"] {border: 1px solid rgba(0,0,0,.08); padding: 1rem 1rem
 [data-testid="stFileUploaderBrowseButton"]:hover {
   background: #64748b !important;
 }
+
+.excel-upload [data-testid="stFileUploaderDropzone"] {
+  background: #185C37 !important;      /* Excel Green */
+  border: 1px solid #1e7f51 !important;
+  border-radius: 12px;
+}
+.excel-upload [data-testid="stFileUploaderDropzone"]:hover {
+  background: #1e7f51 !important;
+}
+.excel-upload [data-testid="stFileUploaderBrowseButton"] {
+  background: #0f3f26 !important;
+  color: white !important;
+  border-radius: 8px !important;
+}
+
+/* Word Blue */
+.word-upload [data-testid="stFileUploaderDropzone"] {
+  background: #185ABD !important;      /* Word Blue */
+  border: 1px solid #2a6cf0 !important;
+  border-radius: 12px;
+}
+.word-upload [data-testid="stFileUploaderDropzone"]:hover {
+  background: #2a6cf0 !important;
+}
+.word-upload [data-testid="stFileUploaderBrowseButton"] {
+  background: #103c82 !important;
+  color: white !important;
+  border-radius: 8px !important;
+}
+
+/* 내부 텍스트 색 통일 */
+.excel-upload [data-testid="stFileUploaderDropzone"] div,
+.word-upload [data-testid="stFileUploaderDropzone"] div {
+  color: white !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -293,11 +328,15 @@ st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
 col_left, col_right = st.columns([1.2, 1])
 with col_left:
     with st.form("input_form", clear_on_submit=False):
+        st.markdown('<div class="excel-upload">', unsafe_allow_html=True)
         xlsx_file = st.file_uploader("엑셀 파일", type=["xlsx", "xlsm"], accept_multiple_files=False)
-        docx_tpl = st.file_uploader("워드 템플릿(.docx)", type=["docx"], accept_multiple_files=False)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        # 출력 파일명
-        out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
+        st.markdown('<div class="word-upload">', unsafe_allow_html=True)
+        docx_tpl = st.file_uploader("워드 템플릿(.docx)", type=["docx"], accept_multiple_files=False)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
 
         # 업로드되면 시트 이름 미리 읽어 선택
         sheet_choice = None
