@@ -1,5 +1,9 @@
 libreoffice
 libreoffice-writer
 libreoffice-core
-fonts-noto-cjk
+libreoffice-calc
 fonts-nanum
+fonts-noto-cjk
+libicu-dev
+libgdiplus
+xvfb
