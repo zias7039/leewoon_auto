@@ -65,62 +65,6 @@ input[type="text"]:focus {
 }
 
 /* ==================================================================== */
-/*  Excel 업로더 (첫 번째 업로더)  - 클래스 기반 (진짜 확실하게 적용)   */
-/* ==================================================================== */
-.excel-uploader [data-testid="stFileUploaderDropzone"] {
-    border: 2px dashed rgba(33,115,70,0.6) !important;
-    background: linear-gradient(135deg, rgba(33,115,70,0.08), rgba(33,115,70,0.15)) !important;
-}
-.excel-uploader [data-testid="stFileUploaderDropzone"]:hover {
-    border-color: rgba(33,115,70,0.9) !important;
-    background: linear-gradient(135deg, rgba(33,115,70,0.15), rgba(33,115,70,0.25)) !important;
-    box-shadow: 0 6px 24px rgba(33,115,70,0.25) !important;
-}
-.excel-uploader [data-testid="stFileUploaderDropzone"] p,
-.excel-uploader [data-testid="stFileUploaderDropzone"] span,
-.excel-uploader [data-testid="stFileUploaderDropzone"] small {
-    color: rgba(33,115,70,1) !important;
-    font-weight: 600 !important;
-}
-.excel-uploader button {
-    background: linear-gradient(135deg, #217346, #1a5c38) !important;
-    border: 1px solid rgba(33,115,70,0.8) !important;
-    color: #fff !important;
-}
-.excel-uploader button:hover {
-    background: linear-gradient(135deg, #25824f, #1e6841) !important;
-    box-shadow: 0 4px 16px rgba(33,115,70,0.35) !important;
-}
-
-/* ==================================================================== */
-/*  Word 업로더 (두 번째 업로더)  - 클래스 기반                         */
-/* ==================================================================== */
-.word-uploader [data-testid="stFileUploaderDropzone"] {
-    border: 2px dashed rgba(24,90,189,0.6) !important;
-    background: linear-gradient(135deg, rgba(24,90,189,0.08), rgba(24,90,189,0.15)) !important;
-}
-.word-uploader [data-testid="stFileUploaderDropzone"]:hover {
-    border-color: rgba(24,90,189,0.9) !important;
-    background: linear-gradient(135deg, rgba(24,90,189,0.15), rgba(24,90,189,0.25)) !important;
-    box-shadow: 0 6px 24px rgba(24,90,189,0.25) !important;
-}
-.word-uploader [data-testid="stFileUploaderDropzone"] p,
-.word-uploader [data-testid="stFileUploaderDropzone"] span,
-.word-uploader [data-testid="stFileUploaderDropzone"] small {
-    color: rgba(24,90,189,1) !important;
-    font-weight: 600 !important;
-}
-.word-uploader button {
-    background: linear-gradient(135deg, #185ABD, #1349a0) !important;
-    border: 1px solid rgba(24,90,189,0.8) !important;
-    color: #fff !important;
-}
-.word-uploader button:hover {
-    background: linear-gradient(135deg, #1c66d1, #1552b3) !important;
-    box-shadow: 0 4px 16px rgba(24,90,189,0.35) !important;
-}
-
-/* ==================================================================== */
 /* 다크모드 전용 오버라이드 — 색 보존                                   */
 /* ==================================================================== */
 @media (prefers-color-scheme: dark) {
