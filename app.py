@@ -197,30 +197,28 @@ col_left, col_right = st.columns([1.2, 1])
 with col_left:
     with st.form("input_form", clear_on_submit=False):
         # Excel 업로더 - Excel 테마
-        h4("엑셀 파일")
-        with st.container():
-            st.markdown('<div class="excel-uploader">', unsafe_allow_html=True)
-            xlsx_file = st.file_uploader(
-                " ", 
-                type=["xlsx", "xlsm"], 
-                accept_multiple_files=False, 
-                key="xlsx_upl",
-                help="엑셀 파일을 업로드하세요"
-            )
-            st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('<h4 class="h4">엑셀 파일</h4><div class="excel-uploader">', unsafe_allow_html=True)
+        xlsx_file = st.file_uploader(
+            " ", 
+            type=["xlsx", "xlsm"], 
+            accept_multiple_files=False, 
+            key="xlsx_upl",
+            help="엑셀 파일을 업로드하세요",
+            label_visibility="collapsed"
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
 
         # Word 템플릿 업로더 - Word 테마
-        h4("워드 템플릿(.docx)")
-        with st.container():
-            st.markdown('<div class="word-uploader">', unsafe_allow_html=True)
-            docx_tpl = st.file_uploader(
-                " ", 
-                type=["docx"], 
-                accept_multiple_files=False, 
-                key="docx_upl",
-                help="Word 템플릿 파일을 업로드하세요"
-            )
-            st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('<h4 class="h4">워드 템플릿(.docx)</h4><div class="word-uploader">', unsafe_allow_html=True)
+        docx_tpl = st.file_uploader(
+            " ", 
+            type=["docx"], 
+            accept_multiple_files=False, 
+            key="docx_upl",
+            help="Word 템플릿 파일을 업로드하세요",
+            label_visibility="collapsed"
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
 
         out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
         
