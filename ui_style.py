@@ -60,55 +60,60 @@ input[type="text"]:focus {
 /* ========================= */
 /*  Excel 업로더 (초록 테마) */
 /* ========================= */
-[data-testid="stFileUploader"].excel-uploader [data-testid="stFileUploaderDropzone"] {
-    border: 2px dashed rgba(33,115,70,0.6) !important;
-    background: linear-gradient(135deg, rgba(33,115,70,0.10), rgba(33,115,70,0.18)) !important;
+/* ===== 업로더를 클래스 기반으로 정확히 타겟팅 ===== */
+.excel-uploader [data-testid="stFileUploaderDropzone"] {
+    border: 2px dashed rgba(33, 115, 70, 0.6) !important;
+    background: linear-gradient(135deg, rgba(33,115,70,0.08) 0%, rgba(33,115,70,0.15) 100%) !important;
 }
-[data-testid="stFileUploader"].excel-uploader [data-testid="stFileUploaderDropzone"]:hover {
+.excel-uploader [data-testid="stFileUploaderDropzone"]:hover {
     border-color: rgba(33,115,70,0.9) !important;
-    background: linear-gradient(135deg, rgba(33,115,70,0.18), rgba(33,115,70,0.25)) !important;
+    background: linear-gradient(135deg, rgba(33,115,70,0.15) 0%, rgba(33,115,70,0.25) 100%) !important;
     box-shadow: 0 6px 24px rgba(33,115,70,0.25) !important;
 }
-[data-testid="stFileUploader"].excel-uploader small,
-[data-testid="stFileUploader"].excel-uploader p {
-    color: rgba(33,115,70,1) !important;
+.excel-uploader [data-testid="stFileUploaderDropzone"] p,
+.excel-uploader [data-testid="stFileUploaderDropzone"] span { 
+    color: rgba(33,115,70,1) !important; font-weight: 600 !important; 
 }
-[data-testid="stFileUploader"].excel-uploader button {
-    background: linear-gradient(135deg, #217346, #1a5c38) !important;
+.excel-uploader [data-testid="stFileUploaderDropzone"] small { 
+    color: rgba(33,115,70,0.75) !important; 
+}
+.excel-uploader button {
+    background: linear-gradient(135deg, #217346 0%, #1a5c38 100%) !important;
     border: 1px solid rgba(33,115,70,0.8) !important;
-    color: white !important;
+    color: #fff !important; font-weight: 600 !important;
 }
-[data-testid="stFileUploader"].excel-uploader button:hover {
-    background: linear-gradient(135deg, #25824f, #1e6841) !important;
+.excel-uploader button:hover {
+    background: linear-gradient(135deg, #25824f 0%, #1e6841 100%) !important;
     box-shadow: 0 4px 16px rgba(33,115,70,0.35) !important;
 }
 
-/* ========================= */
-/*  Word 업로더 (파란 테마) */
-/* ========================= */
-[data-testid="stFileUploader"].word-uploader [data-testid="stFileUploaderDropzone"] {
-    border: 2px dashed rgba(24,90,189,0.6) !important;
-    background: linear-gradient(135deg, rgba(24,90,189,0.10), rgba(24,90,189,0.18)) !important;
+/* ===== Word 전용 테마 (두 번째 업로더) - 클래스 기반 ===== */
+.word-uploader [data-testid="stFileUploaderDropzone"] {
+    border: 2px dashed rgba(24, 90, 189, 0.6) !important;
+    background: linear-gradient(135deg, rgba(24,90,189,0.08) 0%, rgba(24,90,189,0.15) 100%) !important;
 }
-[data-testid="stFileUploader"].word-uploader [data-testid="stFileUploaderDropzone"]:hover {
+.word-uploader [data-testid="stFileUploaderDropzone"]:hover {
     border-color: rgba(24,90,189,0.9) !important;
-    background: linear-gradient(135deg, rgba(24,90,189,0.18), rgba(24,90,189,0.25)) !important;
+    background: linear-gradient(135deg, rgba(24,90,189,0.15) 0%, rgba(24,90,189,0.25) 100%) !important;
     box-shadow: 0 6px 24px rgba(24,90,189,0.25) !important;
 }
-[data-testid="stFileUploader"].word-uploader small,
-[data-testid="stFileUploader"].word-uploader p {
-    color: rgba(24,90,189,1) !important;
+.word-uploader [data-testid="stFileUploaderDropzone"] p,
+.word-uploader [data-testid="stFileUploaderDropzone"] span { 
+    color: rgba(24,90,189,1) !important; font-weight: 600 !important; 
 }
-[data-testid="stFileUploader"].word-uploader button {
-    background: linear-gradient(135deg, #185ABD, #1349A0) !important;
+.word-uploader [data-testid="stFileUploaderDropzone"] small { 
+    color: rgba(24,90,189,0.75) !important; 
+}
+.word-uploader button {
+    background: linear-gradient(135deg, #185ABD 0%, #1349a0 100%) !important;
     border: 1px solid rgba(24,90,189,0.8) !important;
-    color: white !important;
+    color: #fff !important; font-weight: 600 !important;
 }
-[data-testid="stFileUploader"].word-uploader button:hover {
-    background: linear-gradient(135deg, #1C66D1, #1552B3) !important;
+.word-uploader button:hover {
+    background: linear-gradient(135deg, #1c66d1 0%, #1552b3 100%) !important;
     box-shadow: 0 4px 16px rgba(24,90,189,0.35) !important;
 }
-"""
+
 
 def inject():
     st.markdown(f"<style>{BASE_CSS}</style>", unsafe_allow_html=True)
