@@ -232,67 +232,58 @@ def collect_leftover_tokens(doc: Document) -> set[str]:
 # ----------------- UI 스타일 -----------------
 st.set_page_config(page_title="Document Generator", page_icon="🧩", layout="wide")
 
+# app.py
+
+import streamlit as st
+from openpyxl import load_workbook
+from docx import Document
+# ... 기존 import 그대로 ...
+
+st.set_page_config(page_title="납입요청서 자동 생성", layout="wide")  # ← 있으면 유지, 없으면 넣어줘
+
+# ✅ 여기 아래에 바로 CSS + 업로드 카드 UI 넣으면 됨
 st.markdown("""
 <style>
-/* 배경 그라데이션 */
-.stApp {
-  background: radial-gradient(1200px 600px at 10% 0%, rgba(34,211,238,.06), rgba(0,0,0,0)) ,
-              radial-gradient(1200px 600px at 90% 20%, rgba(59,130,246,.06), rgba(0,0,0,0)) ,
-              #0b1220;
+.upload-card {
+  background: rgba(2,6,23,.65);
+  border: 1px solid rgba(148,163,184,.25);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.25);
 }
-
-/* 타이틀 */
-.h1-title {
-  font-size: 36px; font-weight: 800; color: #fff; letter-spacing: .02em;
-  text-shadow: 0 1px 0 rgba(255,255,255,.05);
+.upload-card [data-testid="stFileUploaderDropzone"]{
+  background: rgba(17,24,39,.55);
+  border: 1px solid rgba(148,163,184,.25);
+  border-radius: 12px;
 }
-.h1-sub { color:#94a3b8; margin-top:6px }
-
-/* 카드 */
-.dg-card {
-  position: relative; border: 1px solid rgba(148,163,184,.25);
-  background: rgba(15,23,42,.55); border-radius: 16px; padding: 24px;
-  backdrop-filter: blur(6px);
-  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
-}
-.dg-card:hover { border-color: rgba(34,211,238,.45); box-shadow: 0 8px 30px rgba(34,211,238,.08); }
-
-/* 카드 아이콘 원형 */
-.icon-bubble {
-  width: 80px; height: 80px; border-radius: 16px;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(148,163,184,.15);
-  margin: 8px auto 18px auto;
-}
-
-/* 버튼 */
-.dg-btn-primary {
-  background: linear-gradient(90deg, #06b6d4, #3b82f6);
-  color:#fff; border:0; padding: 12px 18px; border-radius: 12px;
-  font-weight: 700; letter-spacing:.02em;
-}
-.dg-btn-primary:hover { filter: brightness(1.06); box-shadow: 0 6px 22px rgba(56,189,248,.35); }
-
-.dg-btn-outline {
-  background: transparent; color:#22d3ee;
-  border: 2px solid rgba(34,211,238,.6);
-  padding: 10px 16px; border-radius: 10px; font-weight:600;
-}
-.dg-btn-outline:hover{ background: rgba(34,211,238,.08); }
-
-/* 입력창 */
-.dg-input input {
-  background: rgba(2,6,23,.5); border:1px solid rgba(148,163,184,.35);
-  color:#e5e7eb; border-radius: 12px; padding: 12px 14px;
-}
-.dg-input input:focus{ border-color:#22d3ee; box-shadow:none; }
-
-/* 진행바 */
-.progress-wrap{ background: rgba(100,116,139,.25); height:10px; border-radius: 999px; overflow:hidden;}
-.progress-bar{ height:100%; background: linear-gradient(90deg,#06b6d4,#3b82f6); }
-.badge{ font-size:12px; color:#a3aed0; }
+.upload-card [data-testid="stFileUploader"] section { gap: 6px; }
+.upload-card [data-testid="stFileUploader"] button { border-radius: 10px; }
+.upload-title{ font-weight: 800; font-size: 20px; color: #e5e7eb; margin-bottom: 6px; }
+.upload-sub{ color:#94a3b8; font-size:13px; margin-bottom: 14px; }
 </style>
 """, unsafe_allow_html=True)
+
+st.title("DOCUMENT GENERATOR")
+st.write("Automate Your Documents")
+
+col1, col2 = st.columns(2, gap="large")
+
+with col1:
+    st.markdown('<div class="upload-card">', unsafe_allow_html=True)
+    st.markdown('<div class="upload-title">UPLOAD EXCEL TEMPLATE</div>', unsafe_allow_html=True)
+    st.markdown('<div class="upload-sub">엑셀 템플릿(.xlsx / .xlsm)</div>', unsafe_allow_html=True)
+    excel_file = st.file_uploader("", type=["xlsx","xlsm"], label_visibility="collapsed", key="excel")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with col2:
+    st.markdown('<div class="upload-card">', unsafe_allow_html=True)
+    st.markdown('<div class="upload-title">UPLOAD WORD TEMPLATE</div>', unsafe_allow_html=True)
+    st.markdown('<div class="upload-sub">워드 템플릿(.docx)</div>', unsafe_allow_html=True)
+    docx_file = st.file_uploader("", type=["docx"], label_visibility="collapsed", key="docx")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# ✅ 그리고 나서 “출력 파일명 + 문서 생성” 버튼 + 로직 이어 붙이면 됨
+
 
 # ----------------- Streamlit UI -----------------
 st.markdown('<div class="h1-title">DOCUMENT GENERATOR</div>', unsafe_allow_html=True)
