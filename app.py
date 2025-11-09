@@ -26,9 +26,9 @@ st.markdown(
 <style>
 /* 공통 Glassmorphism 토큰 */
 :root{
-  --glass-bg: rgba(15, 23, 42, .35);         /* 유리 배경 */
-  --glass-bd: rgba(148, 163, 184, .35);      /* 테두리 */
-  --glass-shadow: 0 8px 32px rgba(0,0,0,.35);
+  --glass-bg: rgba(15, 23, 42, 0.35);         /* 유리 배경 */
+  --glass-bd: rgba(148, 163, 184, 0.35);      /* 테두리 */
+  --glass-shadow: 0 8px 32px rgba(0,0,0,0.35);
 }
 
 /* 래퍼 공통 카드 느낌 */
@@ -37,7 +37,7 @@ st.markdown(
   padding: 12px;
   margin: 8px 0 18px 0;
   position: relative;
-  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
   border: 1px solid var(--glass-bd);
   box-shadow: var(--glass-shadow);
   backdrop-filter: blur(10px);
@@ -48,14 +48,18 @@ st.markdown(
 .word-upload { --brand:#185ABD; }   /* MS Word blue  */
 
 /* 업로더 드롭존 자체를 정확히 타겟팅 */
-@@ -248,160 +56,165 @@ st.markdown("""
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+.upload-wrap [data-testid="stFileUploaderDropzone"]{
+  background: var(--glass-bg) !important;
+  border: 1px solid color-mix(in srgb, var(--brand) 45%, #ffffff 0%) !important;
+  border-radius: 12px !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
 }
 
 /* 호버/포커스 */
 .upload-wrap [data-testid="stFileUploaderDropzone"]:hover{
   border-color: color-mix(in srgb, var(--brand) 70%, #ffffff 0%) !important;
-  background: rgba(15,23,42,.42) !important;
+  background: rgba(15,23,42,0.42) !important;
 }
 
 /* 내부 텍스트/아이콘 컬러 */
@@ -77,7 +81,7 @@ st.markdown(
 .upload-wrap [data-testid="stFileUploader"] small,
 .upload-wrap [data-testid="stFileUploader"] p,
 .upload-wrap [data-testid="stFileUploader"] span{
-  color: rgba(226,232,240,.9) !important;
+  color: rgba(226,232,240,0.9) !important;
 }
 
 /* (스트림릿 버전 호환용) 베이스웹 드롭존에도 적용 */
