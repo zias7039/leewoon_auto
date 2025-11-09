@@ -113,72 +113,58 @@ input[type="text"]:focus {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
 }
 
-/* ===== Excel 전용 테마 (첫 번째 업로더) ===== */
-[data-testid="stForm"] [data-testid="stFileUploader"]:first-of-type [data-testid="stFileUploaderDropzone"] {
+/* ===== Excel / Word 테마 (클래스 기반: nth-of-type 오작동 방지) ===== */
+.excel-uploader [data-testid="stFileUploaderDropzone"] {
     border: 2px dashed rgba(33, 115, 70, 0.6) !important;
-    background: linear-gradient(135deg, rgba(33, 115, 70, 0.08) 0%, rgba(33, 115, 70, 0.15) 100%) !important;
+    background: linear-gradient(135deg, rgba(33,115,70,.08) 0%, rgba(33,115,70,.15) 100%) !important;
 }
-
-[data-testid="stForm"] [data-testid="stFileUploader"]:first-of-type [data-testid="stFileUploaderDropzone"]:hover {
-    border-color: rgba(33, 115, 70, 0.9) !important;
-    background: linear-gradient(135deg, rgba(33, 115, 70, 0.15) 0%, rgba(33, 115, 70, 0.25) 100%) !important;
-    box-shadow: 0 6px 24px rgba(33, 115, 70, 0.25) !important;
+.excel-uploader [data-testid="stFileUploaderDropzone"]:hover {
+    border-color: rgba(33,115,70,.9) !important;
+    background: linear-gradient(135deg, rgba(33,115,70,.15) 0%, rgba(33,115,70,.25) 100%) !important;
+    box-shadow: 0 6px 24px rgba(33,115,70,.25) !important;
 }
-
-[data-testid="stForm"] [data-testid="stFileUploader"]:first-of-type [data-testid="stFileUploaderDropzone"] p,
-[data-testid="stForm"] [data-testid="stFileUploader"]:first-of-type [data-testid="stFileUploaderDropzone"] span {
-    color: rgba(33, 115, 70, 1) !important;
-    font-weight: 600 !important;
+.excel-uploader [data-testid="stFileUploaderDropzone"] p,
+.excel-uploader [data-testid="stFileUploaderDropzone"] span {
+    color: rgba(33,115,70,1) !important; font-weight: 600 !important;
 }
-
-[data-testid="stForm"] [data-testid="stFileUploader"]:first-of-type [data-testid="stFileUploaderDropzone"] small {
-    color: rgba(33, 115, 70, 0.75) !important;
+.excel-uploader [data-testid="stFileUploaderDropzone"] small {
+    color: rgba(33,115,70,.75) !important;
 }
-
-[data-testid="stForm"] [data-testid="stFileUploader"]:first-of-type button {
+.excel-uploader button {
     background: linear-gradient(135deg, #217346 0%, #1a5c38 100%) !important;
-    border: 1px solid rgba(33, 115, 70, 0.8) !important;
-    color: white !important;
-    font-weight: 600 !important;
+    border: 1px solid rgba(33,115,70,.8) !important;
+    color: #fff !important; font-weight: 600 !important;
 }
-
-[data-testid="stForm"] [data-testid="stFileUploader"]:first-of-type button:hover {
+.excel-uploader button:hover {
     background: linear-gradient(135deg, #25824f 0%, #1e6841 100%) !important;
-    box-shadow: 0 4px 16px rgba(33, 115, 70, 0.35) !important;
+    box-shadow: 0 4px 16px rgba(33,115,70,.35) !important;
 }
 
-/* ===== Word 전용 테마 (두 번째 업로더) ===== */
-[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) [data-testid="stFileUploaderDropzone"] {
+/* Word: 시그니처 블루 적용 */
+.word-uploader [data-testid="stFileUploaderDropzone"] {
     border: 2px dashed rgba(24, 90, 189, 0.6) !important;
-    background: linear-gradient(135deg, rgba(24, 90, 189, 0.08) 0%, rgba(24, 90, 189, 0.15) 100%) !important;
+    background: linear-gradient(135deg, rgba(24,90,189,.08) 0%, rgba(24,90,189,.15) 100%) !important;
 }
-
-[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) [data-testid="stFileUploaderDropzone"]:hover {
-    border-color: rgba(24, 90, 189, 0.9) !important;
-    background: linear-gradient(135deg, rgba(24, 90, 189, 0.15) 0%, rgba(24, 90, 189, 0.25) 100%) !important;
-    box-shadow: 0 6px 24px rgba(24, 90, 189, 0.25) !important;
+.word-uploader [data-testid="stFileUploaderDropzone"]:hover {
+    border-color: rgba(24,90,189,.9) !important;
+    background: linear-gradient(135deg, rgba(24,90,189,.15) 0%, rgba(24,90,189,.25) 100%) !important;
+    box-shadow: 0 6px 24px rgba(24,90,189,.25) !important;
 }
-
-[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) [data-testid="stFileUploaderDropzone"] p,
-[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) [data-testid="stFileUploaderDropzone"] span {
-    color: rgba(24, 90, 189, 1) !important;
-    font-weight: 600 !important;
+.word-uploader [data-testid="stFileUploaderDropzone"] p,
+.word-uploader [data-testid="stFileUploaderDropzone"] span {
+    color: rgba(24,90,189,1) !important; font-weight: 600 !important;
 }
-
-[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) [data-testid="stFileUploaderDropzone"] small {
-    color: rgba(24, 90, 189, 0.75) !important;
+.word-uploader [data-testid="stFileUploaderDropzone"] small {
+    color: rgba(24,90,189,.75) !important;
 }
-
-[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) button {
+.word-uploader button {
     background: linear-gradient(135deg, #185ABD 0%, #1349a0 100%) !important;
-    border: 1px solid rgba(24, 90, 189, 0.8) !important;
-    color: white !important;
-    font-weight: 600 !important;
+    border: 1px solid rgba(24,90,189,.8) !important;
+    color: #fff !important; font-weight: 600 !important;
 }
-
-[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) button:hover {
+.word-uploader button:hover {
     background: linear-gradient(135deg, #1c66d1 0%, #1552b3 100%) !important;
-    box-shadow: 0 4px 16px rgba(24, 90, 189, 0.35) !important;
+    box-shadow: 0 4px 16px rgba(24,90,189,.35) !important;
 }
 
 /* ===== 상태 메시지 스타일 ===== */
