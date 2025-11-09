@@ -6,7 +6,7 @@ import streamlit as st
 from docx import Document
 
 from constants import DEFAULT_OUT, TARGET_SHEET
-from utils.excel_tools import load_wb_and_guess_sheet
+from services.utils.excel_tools import load_wb_and_guess_sheet
 from utils.paths import ensure_docx, ensure_pdf
 from services.generator import generate_documents
 
