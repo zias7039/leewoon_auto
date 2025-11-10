@@ -195,77 +195,69 @@ st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
 
 col_left, col_right = st.columns([1.2, 1])
 with col_left:
-    with st.form("input_form", clear_on_submit=False):
-        # Excel 업로더 - Excel 테마
-        st.markdown('<h4 class="h4">엑셀 파일</h4><div class="excel-uploader">', unsafe_allow_html=True)
-        xlsx_file = st.file_uploader(
-            " ", 
-            type=["xlsx", "xlsm"], 
-            accept_multiple_files=False, 
-            key="xlsx_upl",
-            help="엑셀 파일을 업로드하세요",
-            label_visibility="collapsed"
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
+    # ========= 업로드 직후 미리보기 & 시트 선택 (폼 안) =========
+with st.form("input_form", clear_on_submit=False):
+    st.markdown('<h4 class="h4">엑셀 파일</h4>', unsafe_allow_html=True)
+    xlsx_file = st.file_uploader(" ", type=["xlsx","xlsm"], key="xlsx_upl",
+                                 label_visibility="collapsed")
+    st.markdown('<h4 class="h4">워드 템플릿(.docx)</h4>', unsafe_allow_html=True)
+    docx_tpl  = st.file_uploader(" ", type=["docx"], key="docx_upl",
+                                 label_visibility="collapsed")
 
-        # Word 템플릿 업로더 - Word 테마
-        st.markdown('<h4 class="h4">워드 템플릿(.docx)</h4><div class="word-uploader">', unsafe_allow_html=True)
-        docx_tpl = st.file_uploader(
-            " ", 
-            type=["docx"], 
-            accept_multiple_files=False, 
-            key="docx_upl",
-            help="Word 템플릿 파일을 업로드하세요",
-            label_visibility="collapsed"
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
-        
-        # 시트 선택
+    # ✅ 업로드된 바이트를 '한 번만' 받아 세션에 저장해 재사용
+    if xlsx_file is not None:
+        st.session_state["xlsx_bytes"] = xlsx_file.getvalue()
+        try:
+            wb_tmp = load_workbook(filename=io.BytesIO(st.session_state["xlsx_bytes"]),
+                                   data_only=True)
+            # 업로드 즉시 시트 선택이 보이도록
+            sheet_choice = st.selectbox(
+                "사용할 시트",
+                wb_tmp.sheetnames,
+                index=wb_tmp.sheetnames.index(TARGET_SHEET) if TARGET_SHEET in wb_tmp.sheetnames else 0
+            )
+            st.session_state["sheet_choice"] = sheet_choice
+        except Exception:
+            st.warning("엑셀 미리보기 중 문제가 발생했습니다. 생성은 시도할 수 있습니다.")
+    else:
         sheet_choice = None
-        if xlsx_file is not None:
-            try:
-                wb_tmp = load_workbook(filename=io.BytesIO(xlsx_file.getvalue()), data_only=True)
-                sheet_choice = st.selectbox(
-                    "사용할 시트",
-                    wb_tmp.sheetnames,
-                    index=wb_tmp.sheetnames.index(TARGET_SHEET) if TARGET_SHEET in wb_tmp.sheetnames else 0
-                )
-            except Exception:
-                st.warning("엑셀 미리보기 중 문제가 발생했습니다. 생성 시도는 가능합니다.")
 
-        submitted = st.form_submit_button("문서 생성", use_container_width=True)
+    out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
 
-    if st.session_state.get("docx_preview_shown") is None:
-        st.session_state["docx_preview_shown"] = True
+    submitted = st.form_submit_button("문서 생성", use_container_width=True)
 
-# ================== 생성 실행 ==================
+# ========= 생성 실행 =========
 if submitted:
-    if not xlsx_file or not docx_tpl:
+    if ("xlsx_bytes" not in st.session_state) or (docx_tpl is None):
         st.error("엑셀과 템플릿을 모두 업로드하세요.")
         st.stop()
+
+    # ✅ 여기서도 세션에 저장된 바이트를 재사용 (read() 금지)
+    xlsx_bytes = st.session_state["xlsx_bytes"]
+    docx_bytes_tpl = docx_tpl.getvalue()           # 템플릿도 한 번만 getvalue()
 
     with st.status("문서 생성 중...", expanded=True) as status:
         try:
             st.write("1) 엑셀 로드")
-            wb = load_workbook(filename=io.BytesIO(xlsx_file.getvalue()), data_only=True)
-            ws = wb[sheet_choice] if sheet_choice else (
+            wb = load_workbook(filename=io.BytesIO(xlsx_bytes), data_only=True)
+
+            # ✅ 업로드 때 고른 시트 우선 사용
+            sheet_choice = st.session_state.get("sheet_choice")
+            ws = wb[sheet_choice] if sheet_choice in wb.sheetnames else (
                 wb[TARGET_SHEET] if TARGET_SHEET in wb.sheetnames else wb[wb.sheetnames[0]]
             )
 
             st.write("2) 템플릿 로드")
-            tpl_bytes = docx_tpl.read()
-            doc = Document(io.BytesIO(tpl_bytes))
+            doc = Document(io.BytesIO(docx_bytes_tpl))
 
             st.write("3) 치환 실행")
             replacer = make_replacer(ws)
             replace_everywhere(doc, replacer)
 
             st.write("4) WORD 저장")
-            docx_buf = io.BytesIO()
-            doc.save(docx_buf); docx_buf.seek(0)
-            docx_bytes = docx_buf.getvalue()
+            buf = io.BytesIO()
+            doc.save(buf); buf.seek(0)
+            docx_bytes = buf.getvalue()
 
             st.write("5) PDF 변환 시도")
             pdf_bytes = convert_docx_to_pdf_bytes(docx_bytes)
@@ -280,6 +272,8 @@ if submitted:
             status.update(label="오류", state="error", expanded=True)
             st.exception(e)
             st.stop()
+
+    # (이하 다운로드 버튼/남은 토큰 표시 동일)
 
     st.success("문서가 준비되었습니다.")
     dl_cols = st.columns(3)
