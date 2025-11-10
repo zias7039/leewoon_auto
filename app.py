@@ -195,8 +195,7 @@ st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
 
 col_left, col_right = st.columns([1.2, 1])
 with col_left:
-    # ========= 업로드 직후 미리보기 & 시트 선택 (폼 안) =========
-with st.form("input_form", clear_on_submit=False):
+    with st.form("input_form", clear_on_submit=False):
     st.markdown('<h4 class="h4">엑셀 파일</h4>', unsafe_allow_html=True)
     xlsx_file = st.file_uploader(" ", type=["xlsx","xlsm"], key="xlsx_upl",
                                  label_visibility="collapsed")
@@ -272,6 +271,9 @@ if submitted:
             status.update(label="오류", state="error", expanded=True)
             st.exception(e)
             st.stop()
+
+    # (이하 다운로드 버튼/남은 토큰 표시 동일)
+    
 
     # (이하 다운로드 버튼/남은 토큰 표시 동일)
 
