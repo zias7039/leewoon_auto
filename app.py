@@ -10,15 +10,17 @@ from docx import Document
 from docx.table import _Cell
 from docx.text.paragraph import Paragraph
 
-from ui_style import inject as inject_style, h4
+# 스타일
+from ui_style import inject as inject_style, h4, small_note
 
-# docx→pdf (선택)
+# 선택: docx2pdf
 try:
     from docx2pdf import convert as docx2pdf_convert
 except Exception:
     docx2pdf_convert = None
 
-TOKEN_RE    = re.compile(r"\{\{([A-Z]+[0-9]+)(?:\|([^}]+))?\}\}")
+# -------- 치환 유틸 --------
+TOKEN_RE = re.compile(r"\{\{([A-Z]+[0-9]+)(?:\|([^}]+))?\}\}")
 LEFTOVER_RE = re.compile(r"\{\{[^}]+\}\}")
 DEFAULT_OUT = f"{datetime.today():%Y%m%d}_#_납입요청서_DB저축은행.docx"
 TARGET_SHEET = "2.  배정후 청약시"
@@ -29,7 +31,8 @@ def ensure_docx(name: str) -> str:
 
 def ensure_pdf(name: str) -> str:
     base = (name or "output").strip()
-    if base.lower().endswith(".docx"): base = base[:-5]
+    if base.lower().endswith(".docx"):
+        base = base[:-5]
     return base + ".pdf"
 
 def has_soffice() -> bool:
@@ -40,13 +43,14 @@ def has_soffice() -> bool:
 
 def try_format_as_date(v) -> str:
     try:
-        if v is None: return ""
+        if v is None:
+            return ""
         if isinstance(v, (datetime, date)):
             return f"{v.year}. {v.month}. {v.day}."
         s = str(v).strip()
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
-            d = datetime.strptime(s, "%Y-%m-%d").date()
-            return f"{d.year}. {d.month}. {d.day}."
+            dt = datetime.strptime(s, "%Y-%m-%d").date()
+            return f"{dt.year}. {dt.month}. {dt.day}."
     except Exception:
         pass
     return ""
@@ -71,12 +75,13 @@ def value_to_text(v) -> str:
     return "" if v is None else str(v)
 
 def apply_inline_format(value, fmt: str | None) -> str:
-    if not fmt: return value_to_text(value)
-    if any(tok in fmt for tok in ("YYYY","MM","DD")):
+    if fmt is None or fmt.strip() == "":
+        return value_to_text(value)
+    if any(tok in fmt for tok in ("YYYY", "MM", "DD")):
         if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip()):
             value = datetime.strptime(value.strip(), "%Y-%m-%d").date()
         if isinstance(value, (datetime, date)):
-            f = fmt.replace("YYYY","%Y").replace("MM","%m").replace("DD","%d")
+            f = fmt.replace("YYYY", "%Y").replace("MM","%m").replace("DD","%d")
             return value.strftime(f)
         return value_to_text(value)
     if re.fullmatch(r"[#,0]+(?:\.[0#]+)?", fmt.replace(",", "")):
@@ -135,7 +140,7 @@ def make_replacer(ws):
             except Exception: v = None
             return apply_inline_format(v, fmt)
         replaced = TOKEN_RE.sub(sub, text)
-        # 템플릿의 YYYY년 MM월 DD일 더미 치환
+        # 간이 날짜 더미 치환
         sp = "    "
         today = datetime.today()
         today_str = f"{today.year}년{sp}{today.month}월{sp}{today.day}일"
@@ -189,65 +194,65 @@ inject_style()
 
 st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
 
-col_left, col_right = st.columns([1.2, 1])
+col_left, col_right = st.columns([1.25, 1])
 
 with col_left:
-    with st.form("input_form", clear_on_submit=False):
-        h4("엑셀 파일")
-        st.markdown('<div class="excel-uploader">', unsafe_allow_html=True)
-        xlsx_file = st.file_uploader(" ", type=["xlsx", "xlsm"], key="xlsx_upl",
-                                     label_visibility="collapsed", accept_multiple_files=False)
-        st.markdown('</div>', unsafe_allow_html=True)
+    # 업로더는 form 바깥: 업로드 즉시 rerun → 시트 목록 바로 표시
+    h4("엑셀 파일")
+    st.markdown('<div class="excel-uploader">', unsafe_allow_html=True)
+    xlsx_file = st.file_uploader(
+        "엑셀 업로드", type=["xlsx", "xlsm"], key="xlsx_upl",
+        help="엑셀 파일을 업로드하세요", label_visibility="collapsed"
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        h4("워드 템플릿(.docx)")
-        st.markdown('<div class="word-uploader">', unsafe_allow_html=True)
-        docx_tpl = st.file_uploader(" ", type=["docx"], key="docx_upl",
-                                    label_visibility="collapsed", accept_multiple_files=False)
-        st.markdown('</div>', unsafe_allow_html=True)
+    h4("워드 템플릿(.docx)")
+    st.markdown('<div class="word-uploader">', unsafe_allow_html=True)
+    docx_tpl = st.file_uploader(
+        "워드 템플릿 업로드", type=["docx"], key="docx_upl",
+        help="Word 템플릿 파일을 업로드하세요", label_visibility="collapsed"
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
+    # 시트 선택은 업로드 직후 표시
+    sheet_choice = None
+    if xlsx_file is not None:
+        try:
+            wb_tmp = load_workbook(filename=io.BytesIO(xlsx_file.getvalue()), data_only=True)
+            default_idx = wb_tmp.sheetnames.index(TARGET_SHEET) if TARGET_SHEET in wb_tmp.sheetnames else 0
+            sheet_choice = st.selectbox("사용할 시트", wb_tmp.sheetnames, index=default_idx, key="sheet_choice")
+        except Exception as e:
+            st.warning("엑셀 미리보기 중 문제가 발생했습니다. 생성은 가능할 수 있습니다.")
+            small_note(str(e))
 
-        # 미리 xlsx 바이트 확보(여기서만 getvalue 호출) + 시트 선택 박스 표시
-        xlsx_bytes, tpl_bytes = None, None
-        sheet_choice = None
+    out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
 
-        if xlsx_file is not None:
-            xlsx_bytes = xlsx_file.getvalue()  # read() 대신 getvalue()
-            try:
-                wb_tmp = load_workbook(io.BytesIO(xlsx_bytes), data_only=True)
-                default_idx = wb_tmp.sheetnames.index(TARGET_SHEET) if TARGET_SHEET in wb_tmp.sheetnames else 0
-                sheet_choice = st.selectbox("사용할 시트", wb_tmp.sheetnames, index=default_idx)
-            except Exception as e:
-                st.warning(f"엑셀 미리보기 중 문제가 발생했습니다. 생성은 계속 가능합니다. ({e})")
-
-        if docx_tpl is not None:
-            tpl_bytes = docx_tpl.getvalue()  # read() 대신 getvalue()
-
-        submitted = st.form_submit_button("문서 생성", use_container_width=True)
+    gen = st.button("문서 생성", use_container_width=True)
 
 with col_right:
     st.markdown("#### 안내")
     st.markdown(
-        "- **{{A1}} / {{B7|YYYY.MM.DD}} / {{C3|#,###.00}}** 인라인 포맷 지원\n"
-        "- **문서 생성** 시 WORD, PDF 각각 다운로드 + ZIP 묶음 제공\n"
-        "- PDF 변환은 **MS Word(docx2pdf)** 또는 **LibreOffice(soffice)** 가 설치된 환경에서 동작",
+        "- **{{A1}} / {{B7|YYYY.MM.DD}} / {{C3|#,###.00}}** 형식의 인라인 포맷 지원\n"
+        "- 생성 시 WORD와 PDF 제공, **개별 다운로드** 및 **ZIP 묶음** 제공\n"
+        "- PDF 변환은 **MS Word(docx2pdf)** 또는 **LibreOffice(soffice)** 필요"
     )
 
 # ================== 생성 실행 ==================
-if submitted:
-    if not xlsx_bytes or not tpl_bytes:
+if gen:
+    if not xlsx_file or not docx_tpl:
         st.error("엑셀과 템플릿을 모두 업로드하세요.")
         st.stop()
 
     with st.status("문서 생성 중...", expanded=True) as status:
         try:
             st.write("1) 엑셀 로드")
-            wb = load_workbook(io.BytesIO(xlsx_bytes), data_only=True)
+            wb = load_workbook(filename=io.BytesIO(xlsx_file.getvalue()), data_only=True)
             ws = wb[sheet_choice] if sheet_choice else (
-                wb[TARGET_SHEET] if TARGET_SHEET in wb.sheetnames else wb.active
+                wb[TARGET_SHEET] if TARGET_SHEET in wb.sheetnames else wb[wb.sheetnames[0]]
             )
 
             st.write("2) 템플릿 로드")
+            tpl_bytes = docx_tpl.getvalue()
             doc = Document(io.BytesIO(tpl_bytes))
 
             st.write("3) 치환 실행")
@@ -255,9 +260,9 @@ if submitted:
             replace_everywhere(doc, replacer)
 
             st.write("4) WORD 저장")
-            buf = io.BytesIO()
-            doc.save(buf); buf.seek(0)
-            docx_bytes = buf.getvalue()
+            docx_buf = io.BytesIO()
+            doc.save(docx_buf); docx_buf.seek(0)
+            docx_bytes = docx_buf.getvalue()
 
             st.write("5) PDF 변환 시도")
             pdf_bytes = convert_docx_to_pdf_bytes(docx_bytes)
@@ -274,19 +279,18 @@ if submitted:
             st.stop()
 
     st.success("문서가 준비되었습니다.")
-    c1, c2, c3 = st.columns(3)
-    with c1:
+    dl_cols = st.columns(3)
+    with dl_cols[0]:
         st.download_button("📄 WORD 다운로드", data=docx_bytes,
             file_name=ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT,
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             use_container_width=True)
-    with c2:
+    with dl_cols[1]:
         st.download_button("🖨 PDF 다운로드", data=(pdf_bytes or b""),
             file_name=ensure_pdf(out_name), mime="application/pdf",
-            disabled=not pdf_ok,
-            help=None if pdf_ok else "PDF 변환 엔진(Word/LibreOffice)이 없는 환경입니다.",
+            disabled=not pdf_ok, help=None if pdf_ok else "PDF 변환 엔진(Word 또는 LibreOffice)이 없는 환경입니다.",
             use_container_width=True)
-    with c3:
+    with dl_cols[2]:
         zip_buf = io.BytesIO()
         with ZipFile(zip_buf, "w", ZIP_DEFLATED) as zf:
             zf.writestr(ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT, docx_bytes)
