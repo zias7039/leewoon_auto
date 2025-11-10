@@ -256,7 +256,7 @@ if submitted:
     with st.status("문서 생성 중...", expanded=True) as status:
         try:
             st.write("1) 엑셀 로드")
-            wb = load_workbook(filename=io.BytesIO(xlsx_file.read()), data_only=True)
+            wb = load_workbook(filename=io.BytesIO(xlsx_file.getvalue()), data_only=True)
             ws = wb[sheet_choice] if sheet_choice else (
                 wb[TARGET_SHEET] if TARGET_SHEET in wb.sheetnames else wb[wb.sheetnames[0]]
             )
