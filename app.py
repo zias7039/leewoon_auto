@@ -196,11 +196,11 @@ st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
 col_left, col_right = st.columns([1.2, 1])
 with col_left:
     with st.form("input_form", clear_on_submit=False):
-    st.markdown('<h4 class="h4">엑셀 파일</h4>', unsafe_allow_html=True)
-    xlsx_file = st.file_uploader(" ", type=["xlsx","xlsm"], key="xlsx_upl",
+        st.markdown('<h4 class="h4">엑셀 파일</h4>', unsafe_allow_html=True)
+        xlsx_file = st.file_uploader(" ", type=["xlsx","xlsm"], key="xlsx_upl",
                                  label_visibility="collapsed")
-    st.markdown('<h4 class="h4">워드 템플릿(.docx)</h4>', unsafe_allow_html=True)
-    docx_tpl  = st.file_uploader(" ", type=["docx"], key="docx_upl",
+        st.markdown('<h4 class="h4">워드 템플릿(.docx)</h4>', unsafe_allow_html=True)
+        docx_tpl  = st.file_uploader(" ", type=["docx"], key="docx_upl",
                                  label_visibility="collapsed")
 
     # ✅ 업로드된 바이트를 '한 번만' 받아 세션에 저장해 재사용
