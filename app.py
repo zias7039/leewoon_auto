@@ -2,6 +2,7 @@ import io, os, re, tempfile, subprocess
 from datetime import datetime, date
 from decimal import Decimal
 from zipfile import ZipFile, ZIP_DEFLATED, BadZipFile
+from typing import Optional
 
 import streamlit as st
 from openpyxl import load_workbook, Workbook
@@ -31,7 +32,59 @@ def ensure_docx(name: str) -> str:
 
 def ensure_pdf(name: str) -> str:
     base = (name or "output").strip()
-@@ -127,50 +128,65 @@ def replace_everywhere(doc: Document, repl_func):
+@@ -52,51 +54,51 @@ def try_format_as_date(v) -> str:
+            dt = datetime.strptime(s, "%Y-%m-%d").date()
+            return f"{dt.year}. {dt.month}. {dt.day}."
+    except Exception:
+        pass
+    return ""
+
+def fmt_number(v) -> str:
+    try:
+        if isinstance(v, (int, float, Decimal)):
+            return f"{float(v):,.0f}"
+        if isinstance(v, str):
+            raw = v.replace(",", "")
+            if re.fullmatch(r"-?\d+(\.\d+)?", raw):
+                return f"{float(raw):,.0f}"
+    except Exception:
+        pass
+    return ""
+
+def value_to_text(v) -> str:
+    s = try_format_as_date(v)
+    if s: return s
+    s = fmt_number(v)
+    if s: return s
+    return "" if v is None else str(v)
+
+def apply_inline_format(value, fmt: Optional[str]) -> str:
+    if fmt is None or fmt.strip() == "":
+        return value_to_text(value)
+    if any(tok in fmt for tok in ("YYYY", "MM", "DD")):
+        if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip()):
+            value = datetime.strptime(value.strip(), "%Y-%m-%d").date()
+        if isinstance(value, (datetime, date)):
+            f = fmt.replace("YYYY", "%Y").replace("MM","%m").replace("DD","%d")
+            return value.strftime(f)
+        return value_to_text(value)
+    if re.fullmatch(r"[#,0]+(?:\.[0#]+)?", fmt.replace(",", "")):
+        try:
+            num = float(str(value).replace(",", ""))
+            decimals = len(fmt.split(".")[1]) if "." in fmt else 0
+            return f"{num:,.{decimals}f}"
+        except Exception:
+            return value_to_text(value)
+    return value_to_text(value)
+
+def iter_block_items(parent):
+    if hasattr(parent, "paragraphs") and hasattr(parent, "tables"):
+        for p in parent.paragraphs: yield p
+        for t in parent.tables:
+            for row in t.rows:
+                for cell in row.cells:
+                    for item in iter_block_items(cell): yield item
+@@ -127,51 +129,66 @@ def replace_everywhere(doc: Document, repl_func):
         if isinstance(item, Paragraph):
             replace_in_paragraph(item, repl_func)
     for section in doc.sections:
@@ -72,7 +125,7 @@ def load_uploaded_workbook(uploaded_file) -> Workbook:
         raise InvalidFileException("엑셀 파일이 손상되었거나 XLSX 형식이 아닙니다.") from exc
 
 
-def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> bytes | None:
+def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
     try:
         with tempfile.TemporaryDirectory() as td:
             in_path = os.path.join(td, "doc.docx")
@@ -97,7 +150,8 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> bytes | None:
         pass
     return None
 
-@@ -196,105 +212,113 @@ st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
+def collect_leftover_tokens(doc: Document) -> set[str]:
+@@ -196,105 +213,113 @@ st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
 
 col_left, col_right = st.columns([1.25, 1])
 
