@@ -1,11 +1,11 @@
-# -*- coding: utf-8 -*-
 import io, os, re, tempfile, subprocess
 from datetime import datetime, date
 from decimal import Decimal
-from zipfile import ZipFile, ZIP_DEFLATED
+from zipfile import ZipFile, ZIP_DEFLATED, BadZipFile
 
 import streamlit as st
-from openpyxl import load_workbook
+from openpyxl import load_workbook, Workbook
+from openpyxl.utils.exceptions import InvalidFileException
 from docx import Document
 from docx.table import _Cell
 from docx.text.paragraph import Paragraph
@@ -31,99 +31,7 @@ def ensure_docx(name: str) -> str:
 
 def ensure_pdf(name: str) -> str:
     base = (name or "output").strip()
-    if base.lower().endswith(".docx"):
-        base = base[:-5]
-    return base + ".pdf"
-
-def has_soffice() -> bool:
-    return any(
-        os.path.isfile(os.path.join(p, "soffice")) or os.path.isfile(os.path.join(p, "soffice.bin"))
-        for p in os.environ.get("PATH", "").split(os.pathsep)
-    )
-
-def try_format_as_date(v) -> str:
-    try:
-        if v is None:
-            return ""
-        if isinstance(v, (datetime, date)):
-            return f"{v.year}. {v.month}. {v.day}."
-        s = str(v).strip()
-        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
-            dt = datetime.strptime(s, "%Y-%m-%d").date()
-            return f"{dt.year}. {dt.month}. {dt.day}."
-    except Exception:
-        pass
-    return ""
-
-def fmt_number(v) -> str:
-    try:
-        if isinstance(v, (int, float, Decimal)):
-            return f"{float(v):,.0f}"
-        if isinstance(v, str):
-            raw = v.replace(",", "")
-            if re.fullmatch(r"-?\d+(\.\d+)?", raw):
-                return f"{float(raw):,.0f}"
-    except Exception:
-        pass
-    return ""
-
-def value_to_text(v) -> str:
-    s = try_format_as_date(v)
-    if s: return s
-    s = fmt_number(v)
-    if s: return s
-    return "" if v is None else str(v)
-
-def apply_inline_format(value, fmt: str | None) -> str:
-    if fmt is None or fmt.strip() == "":
-        return value_to_text(value)
-    if any(tok in fmt for tok in ("YYYY", "MM", "DD")):
-        if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip()):
-            value = datetime.strptime(value.strip(), "%Y-%m-%d").date()
-        if isinstance(value, (datetime, date)):
-            f = fmt.replace("YYYY", "%Y").replace("MM","%m").replace("DD","%d")
-            return value.strftime(f)
-        return value_to_text(value)
-    if re.fullmatch(r"[#,0]+(?:\.[0#]+)?", fmt.replace(",", "")):
-        try:
-            num = float(str(value).replace(",", ""))
-            decimals = len(fmt.split(".")[1]) if "." in fmt else 0
-            return f"{num:,.{decimals}f}"
-        except Exception:
-            return value_to_text(value)
-    return value_to_text(value)
-
-def iter_block_items(parent):
-    if hasattr(parent, "paragraphs") and hasattr(parent, "tables"):
-        for p in parent.paragraphs: yield p
-        for t in parent.tables:
-            for row in t.rows:
-                for cell in row.cells:
-                    for item in iter_block_items(cell): yield item
-    elif isinstance(parent, _Cell):
-        for p in parent.paragraphs: yield p
-        for t in parent.tables:
-            for row in t.rows:
-                for cell in row.cells:
-                    for item in iter_block_items(cell): yield item
-
-def replace_in_paragraph(par: Paragraph, repl_func):
-    changed = False
-    for run in par.runs:
-        new_text = repl_func(run.text)
-        if new_text != run.text:
-            run.text = new_text
-            changed = True
-    if changed: return
-    full_text = "".join(r.text for r in par.runs)
-    new_text = repl_func(full_text)
-    if new_text == full_text: return
-    if par.runs:
-        par.runs[0].text = new_text
-        for r in par.runs[1:]: r.text = ""
-
-def replace_everywhere(doc: Document, repl_func):
-    for item in iter_block_items(doc):
+@@ -127,50 +128,65 @@ def replace_everywhere(doc: Document, repl_func):
         if isinstance(item, Paragraph):
             replace_in_paragraph(item, repl_func)
     for section in doc.sections:
@@ -148,6 +56,21 @@ def make_replacer(ws):
             replaced = replaced.replace(token, today_str)
         return replaced
     return _repl
+
+
+def load_uploaded_workbook(uploaded_file) -> Workbook:
+    """Load an uploaded workbook while providing user-friendly errors."""
+    data = uploaded_file.getvalue() if uploaded_file is not None else None
+    if not data:
+        raise InvalidFileException("엑셀 파일이 비어 있습니다.")
+    # XLSX/XLTM/XLAM files are ZIP archives. Guard against classic XLS uploads.
+    if not data.startswith(b"PK"):
+        raise InvalidFileException("XLSX 형식의 파일만 지원합니다. 다른 형식(xls 등)은 변환 후 업로드하세요.")
+    try:
+        return load_workbook(filename=io.BytesIO(data), data_only=True)
+    except BadZipFile as exc:
+        raise InvalidFileException("엑셀 파일이 손상되었거나 XLSX 형식이 아닙니다.") from exc
+
 
 def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> bytes | None:
     try:
@@ -174,25 +97,7 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> bytes | None:
         pass
     return None
 
-def collect_leftover_tokens(doc: Document) -> set[str]:
-    leftovers = set()
-    for item in iter_block_items(doc):
-        if isinstance(item, Paragraph):
-            text = "".join(r.text for r in item.runs) if item.runs else item.text
-            for m in LEFTOVER_RE.findall(text or ""): leftovers.add(m)
-    for section in doc.sections:
-        for container in (section.header, section.footer):
-            for item in iter_block_items(container):
-                if isinstance(item, Paragraph):
-                    text = "".join(r.text for r in item.runs) if item.runs else item.text
-                    for m in LEFTOVER_RE.findall(text or ""): leftovers.add(m)
-    return leftovers
-
-# ===================== UI =====================
-st.set_page_config(page_title="납입요청서 자동 생성", page_icon="🧾", layout="wide")
-inject_style()
-
-st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
+@@ -196,105 +212,113 @@ st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
 
 col_left, col_right = st.columns([1.25, 1])
 
@@ -218,9 +123,13 @@ with col_left:
     sheet_choice = None
     if xlsx_file is not None:
         try:
-            wb_tmp = load_workbook(filename=io.BytesIO(xlsx_file.getvalue()), data_only=True)
+            wb_tmp = load_uploaded_workbook(xlsx_file)
             default_idx = wb_tmp.sheetnames.index(TARGET_SHEET) if TARGET_SHEET in wb_tmp.sheetnames else 0
             sheet_choice = st.selectbox("사용할 시트", wb_tmp.sheetnames, index=default_idx, key="sheet_choice")
+        except InvalidFileException as e:
+            st.error("지원하지 않는 엑셀 형식입니다. XLSX 파일을 업로드하세요.")
+            small_note(str(e))
+            xlsx_file = None
         except Exception as e:
             st.warning("엑셀 미리보기 중 문제가 발생했습니다. 생성은 가능할 수 있습니다.")
             small_note(str(e))
@@ -246,7 +155,7 @@ if gen:
     with st.status("문서 생성 중...", expanded=True) as status:
         try:
             st.write("1) 엑셀 로드")
-            wb = load_workbook(filename=io.BytesIO(xlsx_file.getvalue()), data_only=True)
+            wb = load_uploaded_workbook(xlsx_file)
             ws = wb[sheet_choice] if sheet_choice else (
                 wb[TARGET_SHEET] if TARGET_SHEET in wb.sheetnames else wb[wb.sheetnames[0]]
             )
@@ -273,6 +182,10 @@ if gen:
             leftovers = sorted(list(collect_leftover_tokens(doc_after)))
 
             status.update(label="완료", state="complete", expanded=False)
+        except InvalidFileException as e:
+            status.update(label="엑셀 형식 오류", state="error", expanded=True)
+            st.error(str(e))
+            st.stop()
         except Exception as e:
             status.update(label="오류", state="error", expanded=True)
             st.exception(e)
@@ -298,10 +211,3 @@ if gen:
         zip_buf.seek(0)
         st.download_button("📦 ZIP (WORD+PDF)", data=zip_buf,
             file_name=(ensure_pdf(out_name).replace(".pdf","") + "_both.zip"),
-            mime="application/zip", use_container_width=True)
-
-    if leftovers:
-        with st.expander("템플릿에 남아있는 토큰"):
-            st.write(", ".join(leftovers))
-    else:
-        st.caption("모든 토큰이 치환되었습니다.")
