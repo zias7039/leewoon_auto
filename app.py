@@ -263,17 +263,15 @@ if st.button("🚀 문서 생성", type="primary", use_container_width=True):
     with st.status("📝 문서 생성 중...", expanded=True) as status:
         try:
             st.write("1️⃣ 엑셀 로드")
-            # 파일 포인터를 처음으로 되돌리기
-            xlsx_file.seek(0)
-            wb = load_workbook(filename=io.BytesIO(xlsx_file.read()), data_only=True)
+            # getvalue()로 바이트 데이터 직접 가져오기
+            wb = load_workbook(filename=io.BytesIO(xlsx_file.getvalue()), data_only=True)
             ws = wb[sheet_choice] if sheet_choice else (
                 wb[TARGET_SHEET] if TARGET_SHEET in wb.sheetnames else wb[wb.sheetnames[0]]
             )
 
             st.write("2️⃣ 템플릿 로드")
-            # 파일 포인터를 처음으로 되돌리기
-            docx_tpl.seek(0)
-            tpl_bytes = docx_tpl.read()
+            # getvalue()로 바이트 데이터 직접 가져오기
+            tpl_bytes = docx_tpl.getvalue()
             doc = Document(io.BytesIO(tpl_bytes))
 
             st.write("3️⃣ 치환 실행")
