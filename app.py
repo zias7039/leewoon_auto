@@ -209,18 +209,23 @@ def load_uploaded_workbook(uploaded_file) -> Workbook:
     if not data:
         raise InvalidFileException("엑셀 파일이 비어 있습니다.")
 
-    # XLSX/XLTM/XLAM 파일은 ZIP 헤더(PK)로 시작
-    if not data.startswith(b"PK"):
-        raise InvalidFileException(
-            "XLSX 형식의 파일만 지원합니다. 다른 형식(xls 등)은 변환 후 업로드하세요."
-        )
-
     try:
+        # 파일 형식 판단은 openpyxl에 맡김
         return load_workbook(filename=io.BytesIO(data), data_only=True)
     except BadZipFile as exc:
+        # xls를 xlsx로 확장자만 바꾼 경우 등
         raise InvalidFileException(
-            "엑셀 파일이 손상되었거나 XLSX 형식이 아닙니다."
+            "엑셀 파일이 손상되었거나, 실제로는 XLS 형식일 수 있습니다.\n"
+            "엑셀에서 열어서 '다른 이름으로 저장 > Excel 통합 문서 (*.xlsx)'로 다시 저장한 뒤 업로드해 보세요."
         ) from exc
+    except InvalidFileException as exc:
+        raise InvalidFileException(
+            "이 환경에서 인식할 수 없는 엑셀 형식입니다.\n"
+            "엑셀에서 다시 저장한 뒤 업로드해 보세요."
+        ) from exc
+    except Exception as exc:
+        # 그 외 예외는 그대로 메시지 보여주기
+        raise InvalidFileException(f"엑셀 파일을 여는 중 오류가 발생했습니다: {exc}") from exc
 
 
 def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
