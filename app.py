@@ -209,21 +209,31 @@ def load_uploaded_workbook(uploaded_file) -> Workbook:
         raise InvalidFileException("엑셀 파일을 업로드하세요.")
 
     fname = (uploaded_file.name or "").strip()
-    # 드래그앤드롭 시에도 확장자 강제 체크
+    # 확장자 체크
     if not fname.lower().endswith((".xlsx", ".xlsm")):
         raise InvalidFileException(
             f"엑셀 통합 문서(xlsx/xlsm)만 지원합니다.\n"
             f"현재 업로드된 파일: {fname}"
         )
 
-    data = uploaded_file.getvalue()
-    if not data:
-        raise InvalidFileException("엑셀 파일이 비어 있습니다.")
+    # ★ Streamlit UploadedFile 스트림을 맨 앞으로 돌린 뒤 읽기
+    try:
+        uploaded_file.seek(0)
+    except Exception:
+        pass
 
+    try:
+        data = uploaded_file.read()
+    except Exception as exc:
+        raise InvalidFileException(
+            f"엑셀 파일을 읽는 중 문제가 발생했습니다: {exc}"
+        ) from exc
+
+    # ★ 여기서 더 이상 '0바이트 여부'는 체크하지 않고,
+    #    openpyxl이 실제로 열 수 있는지에만 의존한다.
     try:
         return load_workbook(filename=io.BytesIO(data), data_only=True)
     except BadZipFile as exc:
-        # xls를 xlsx로 확장자만 바꿨거나, 파일이 깨진 경우
         raise InvalidFileException(
             "엑셀 파일이 손상되었거나 실제로는 XLS 형식일 수 있습니다.\n"
             "엑셀에서 열어서 '다른 이름으로 저장 > Excel 통합 문서 (*.xlsx)'로 다시 저장한 뒤 업로드해 보세요."
