@@ -70,23 +70,6 @@ input[type="text"]:focus {
     color: rgba(100, 116, 139, 0.8);
 }
 
-/* ===== 파일 업로더 기본 스타일 ===== */
-[data-testid="stFileUploaderDropzone"] {
-    background: rgba(248, 250, 252, 0.6) !important;
-    border: 2px dashed rgba(203, 213, 225, 0.6) !important;
-    border-radius: 12px !important;
-    padding: 32px 24px !important;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    min-height: 140px !important;
-}
-
-[data-testid="stFileUploaderDropzone"]:hover {
-    border-color: rgba(148, 163, 184, 0.8) !important;
-    background: rgba(241, 245, 249, 0.8) !important;
-    transform: translateY(-2px) !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
-}
-
 [data-testid="stFileUploaderDropzone"] p {
     color: rgba(71, 85, 105, 0.9) !important;
     font-size: 0.95rem !important;
@@ -95,10 +78,6 @@ input[type="text"]:focus {
 [data-testid="stFileUploaderDropzone"] small {
     color: rgba(100, 116, 139, 0.7) !important;
     font-size: 0.85rem !important;
-}
-
-[data-testid="stFileUploader"] section {
-    gap: 10px !important;
 }
 
 [data-testid="stFileUploader"] button {
