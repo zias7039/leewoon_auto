@@ -251,9 +251,9 @@ def render_inputs():
 
     h4("엑셀 파일")
     st.markdown(
-        '<div class="section-caption">청약/납입 데이터가 들어있는 기준 엑셀 파일을 업로드하세요.</div>',
-        unsafe_allow_html=True,
-    )
+    '<div class="app-subtitle">엑셀 + 워드 템플릿을 합쳐 납입요청서 DOCX/PDF를 만들고 ZIP으로 내려받는 도구입니다.</div>',
+    unsafe_allow_html=True,
+)
     xlsx_file = st.file_uploader("엑셀 업로드", type=["xlsx", "xlsm"], key="xlsx")
     if xlsx_file is not None:
         try:
