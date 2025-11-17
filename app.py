@@ -250,65 +250,57 @@ def render_inputs():
     st.markdown('<div class="app-card">', unsafe_allow_html=True)
 
     h4("엑셀 파일")
-    st.markdown(
-    '<div class="app-subtitle">엑셀 + 워드 템플릿을 합쳐 납입요청서 DOCX/PDF를 만들고 ZIP으로 내려받는 도구입니다.</div>',
-    unsafe_allow_html=True,
-)
+    section_caption("납입요청서 자동생성에 필요한 데이터가 들어있는 엑셀 파일을 업로드하세요.")
     xlsx_file = st.file_uploader("엑셀 업로드", type=["xlsx", "xlsm"], key="xlsx")
-    if xlsx_file is not None:
-        try:
-            data = xlsx_file.getvalue()
-            if data:
-                st.session_state.xlsx_data = data
-                st.session_state.xlsx_name = xlsx_file.name
-                st.success(f"{xlsx_file.name}: {len(data):,} bytes")
-            else:
-                st.error("엑셀 파일이 0 bytes입니다.")
-        except Exception as e:
-            st.error(f"엑셀 파일 읽기 오류: {e}")
+
+    if xlsx_file:
+        data = xlsx_file.getvalue()
+        if data:
+            st.session_state.xlsx_data = data
+            st.session_state.xlsx_name = xlsx_file.name
+            st.success(f"{xlsx_file.name}: {len(data):,} bytes")
+        else:
+            st.error("엑셀 파일이 0 bytes입니다.")
 
     st.markdown("---")
 
-    h4("워드 템플릿(.docx)")
-    st.markdown(
-        '<div class="section-caption">납입요청서 양식이 들어있는 Word 템플릿을 업로드하세요.</div>',
-        unsafe_allow_html=True,
-    )
-    docx_file = st.file_uploader("템플릿 업로드", type=["docx"], key="docx")
-    if docx_file is not None:
-        try:
-            data = docx_file.getvalue()
-            if data:
-                st.session_state.docx_data = data
-                st.session_state.docx_name = docx_file.name
-                st.success(f"{docx_file.name}: {len(data):,} bytes")
-            else:
-                st.error("워드 템플릿이 0 bytes입니다.")
-        except Exception as e:
-            st.error(f"워드 파일 읽기 오류: {e}")
+    h4("워드 템플릿 (.docx)")
+    section_caption("{{A1}}, {{B5|#,###}}, {{C3|YYYY.MM.DD}} 같은 치환 태그가 들어있는 템플릿")
+    docx_file = st.file_uploader("워드 템플릿 업로드", type=["docx"], key="docx")
+
+    if docx_file:
+        data = docx_file.getvalue()
+        if data:
+            st.session_state.docx_data = data
+            st.session_state.docx_name = docx_file.name
+            st.success(f"{docx_file.name}: {len(data):,} bytes")
+        else:
+            st.error("워드 템플릿이 0 bytes입니다.")
 
     st.markdown("---")
 
     sheet_choice = None
     if st.session_state.xlsx_data:
         try:
-            wb = load_workbook_from_bytes(
-                st.session_state.xlsx_data, st.session_state.xlsx_name
-            )
+            wb = load_workbook_from_bytes(st.session_state.xlsx_data, st.session_state.xlsx_name)
             sheets = wb.sheetnames
             index = sheets.index(TARGET_SHEET) if TARGET_SHEET in sheets else 0
-            h4("시트 선택")
-            sheet_choice = st.selectbox("사용할 시트", sheets, index=index)
-        except Exception as e:
-            st.error(f"엑셀 시트 읽기 오류: {e}")
 
-    h4("출력 설정")
-    out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
-    gen = st.button("ZIP 생성", use_container_width=True, type="primary")
+            h4("사용할 시트 선택")
+            sheet_choice = st.selectbox("시트", sheets, index=index)
+        except Exception as e:
+            st.error(f"시트 로드 오류: {e}")
+
+    st.markdown("---")
+
+    h4("출력 파일명")
+    out_name = st.text_input("파일명", value=DEFAULT_OUT)
+
+    generate = st.button("ZIP 생성", use_container_width=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    return sheet_choice, out_name, gen
+    return sheet_choice, out_name, generate
 
 def handle_generate(sheet_choice: Optional[str], out_name: str):
     if not st.session_state.xlsx_data or not st.session_state.docx_data:
