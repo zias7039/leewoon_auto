@@ -343,9 +343,9 @@ with col_left:
     # 시트 선택은 업로드 직후 표시
     sheet_choice = None
     # 시트 선택은 업로드 직후 표시
-sheet_choice = None
-if xlsx_file is not None:
-    try:
+    sheet_choice = None
+        if xlsx_file is not None:
+            try:
         # ★ 여기서도 seek(0) 명시적으로 호출
         xlsx_file.seek(0)
         wb_tmp = load_uploaded_workbook(xlsx_file)
