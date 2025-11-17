@@ -217,9 +217,30 @@ def load_uploaded_workbook(uploaded_file) -> Workbook:
         )
 
     try:
-        # ★ Streamlit UploadedFile에서 바로 바이트 읽기
-        # seek 없이 직접 getvalue() 호출
-        data = uploaded_file.getvalue()
+        # ★ 여러 방법을 시도
+        data = None
+        
+        # 방법 1: getvalue()
+        try:
+            data = uploaded_file.getvalue()
+        except:
+            pass
+        
+        # 방법 2: read()
+        if not data or len(data) == 0:
+            try:
+                uploaded_file.seek(0)
+                data = uploaded_file.read()
+            except:
+                pass
+        
+        # 방법 3: 직접 스트림 사용
+        if not data or len(data) == 0:
+            try:
+                uploaded_file.seek(0)
+                data = uploaded_file.getbuffer().tobytes()
+            except:
+                pass
         
         # 디버깅: 실제 데이터 크기 확인
         if not data or len(data) == 0:
@@ -228,9 +249,10 @@ def load_uploaded_workbook(uploaded_file) -> Workbook:
                 f"파일명: {fname}\n"
                 f"크기: {len(data) if data else 0} bytes\n\n"
                 f"해결 방법:\n"
-                f"1. 브라우저를 새로고침하고 다시 업로드해보세요\n"
-                f"2. 파일을 다른 위치에 복사한 후 업로드해보세요\n"
-                f"3. 엑셀에서 파일을 열어 '다른 이름으로 저장'한 후 업로드해보세요"
+                f"1. 브라우저를 완전히 새로고침 (Ctrl+Shift+R 또는 Cmd+Shift+R)\n"
+                f"2. 시크릿/프라이빗 모드로 접속해보세요\n"
+                f"3. 파일을 다른 이름으로 저장한 후 업로드해보세요\n"
+                f"4. 다른 브라우저에서 시도해보세요"
             )
         
     except InvalidFileException:
@@ -331,10 +353,14 @@ col_left, col_right = st.columns([1.25, 1])
 
 with col_left:
     h4("엑셀 파일")
+    # ★ key 변경으로 업로더 완전히 리셋
+    if 'upload_key' not in st.session_state:
+        st.session_state.upload_key = 0
+    
     xlsx_file = st.file_uploader(
         "엑셀 업로드",
         type=["xlsx", "xlsm"],
-        key="xlsx_upl",
+        key=f"xlsx_upl_{st.session_state.upload_key}",
         help="엑셀 파일을 업로드하세요",
     )
 
@@ -342,7 +368,7 @@ with col_left:
     docx_tpl = st.file_uploader(
         "워드 템플릿 업로드",
         type=["docx"],
-        key="docx_upl",
+        key=f"docx_upl_{st.session_state.upload_key}",
         help="Word 템플릿 파일을 업로드하세요",
     )
 
@@ -351,26 +377,46 @@ with col_left:
     # 시트 선택은 업로드 직후 표시
     sheet_choice = None
     if xlsx_file is not None:
+        # ★ 파일 크기 디버깅 정보 표시
         try:
-            wb_tmp = load_uploaded_workbook(xlsx_file)
-            default_idx = (
-                wb_tmp.sheetnames.index(TARGET_SHEET)
-                if TARGET_SHEET in wb_tmp.sheetnames
-                else 0
-            )
-            sheet_choice = st.selectbox(
-                "사용할 시트",
-                wb_tmp.sheetnames,
-                index=default_idx,
-                key="sheet_choice",
-            )
-        except InvalidFileException as e:
-            st.error("엑셀 파일을 읽을 수 없습니다")
-            st.error(str(e))
-            xlsx_file = None
+            file_size = len(xlsx_file.getvalue())
+            if file_size == 0:
+                st.error(f"⚠️ 파일이 비어있습니다 (0 bytes)")
+                st.info("해결 방법을 시도해보세요:")
+                st.markdown("""
+                1. **브라우저 새로고침** (Ctrl+Shift+R 또는 Cmd+Shift+R)
+                2. **시크릿/프라이빗 창**에서 다시 접속
+                3. **파일 이름을 영문으로 변경** (예: data.xlsx)
+                4. **엑셀에서 다시 저장** 후 업로드
+                5. **다른 브라우저** 시도 (Chrome, Edge, Firefox)
+                """)
+                xlsx_file = None
+            else:
+                small_note(f"파일 크기: {file_size:,} bytes")
         except Exception as e:
-            st.warning("엑셀 미리보기 중 문제가 발생했습니다.")
-            small_note(str(e))
+            st.warning(f"파일 정보 확인 중 오류: {e}")
+        
+        if xlsx_file is not None:
+            try:
+                wb_tmp = load_uploaded_workbook(xlsx_file)
+                default_idx = (
+                    wb_tmp.sheetnames.index(TARGET_SHEET)
+                    if TARGET_SHEET in wb_tmp.sheetnames
+                    else 0
+                )
+                sheet_choice = st.selectbox(
+                    "사용할 시트",
+                    wb_tmp.sheetnames,
+                    index=default_idx,
+                    key="sheet_choice",
+                )
+            except InvalidFileException as e:
+                st.error("엑셀 파일을 읽을 수 없습니다")
+                st.error(str(e))
+                xlsx_file = None
+            except Exception as e:
+                st.warning("엑셀 미리보기 중 문제가 발생했습니다.")
+                small_note(str(e))
 
     out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
 
