@@ -110,3 +110,6 @@ def h4(text):
 
 def section_caption(text):
     st.markdown(f'<div class="section-caption">{text}</div>', unsafe_allow_html=True)
+
+def small_note(text):
+    st.markdown(f'<div class="section-caption">{text}</div>', unsafe_allow_html=True)
