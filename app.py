@@ -377,6 +377,29 @@ def init_session_state():
         st.markdown("---")
 
         # ===== 시트 선택 =====
+
+        def render_left_column():
+    h4("엑셀 파일")
+
+    xlsx_file = st.file_uploader(
+        "엑셀 업로드",
+        type=["xlsx", "xlsm"],
+        key="xlsx_normal",
+        help="엑셀 파일을 업로드하세요.",
+    )
+
+    if xlsx_file is not None:
+        try:
+            xlsx_bytes = xlsx_file.getvalue()
+            if len(xlsx_bytes) > 0:
+                st.session_state.xlsx_data = xlsx_bytes
+                st.session_state.xlsx_name = xlsx_file.name
+                st.success(f"✅ {xlsx_file.name}: {len(xlsx_bytes):,} bytes")
+            else:
+                st.error("⚠️ 업로드된 파일이 0 bytes입니다.")
+        except Exception as e:
+            st.error(f"파일 읽기 오류: {e}")
+            
         sheet_choice = None
         if st.session_state.xlsx_data:
             try:
