@@ -1,4 +1,3 @@
-import base64
 import io
 import os
 import re
@@ -115,7 +114,7 @@ def apply_inline_format(value, fmt: Optional[str]) -> str:
 
     # 날짜 포맷 처리
     if any(tok in fmt for tok in ("YYYY", "MM", "DD")):
-        if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip()):
+        if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d2", value.strip()):
             value = datetime.strptime(value.strip(), "%Y-%m-%d").date()
         if isinstance(value, (datetime, date)):
             f = (
@@ -328,57 +327,9 @@ def init_session_state():
     if "docx_name" not in st.session_state:
         st.session_state.docx_name = None
 
-        # Base64 업로드
-        with st.expander("📋 또는 Base64로 붙여넣기 (방법 2)", expanded=False):
-            st.markdown(
-                """
-                **파일 업로드가 안될 때 사용하세요:**
-                1. 터미널/명령 프롬프트에서 실행:
-                ```bash
-                # Windows (PowerShell)
-                [Convert]::ToBase64String([IO.File]::ReadAllBytes("파일경로.xlsx"))
-               
-                # Mac/Linux
-                base64 파일경로.xlsx
-                ```
-                2. 출력된 텍스트를 복사해서 아래 박스에 붙여넣기
-                """
-            )
-            xlsx_base64 = st.text_area(
-                "Base64 텍스트",
-                height=100,
-                placeholder="여기에 Base64 인코딩된 엑셀 파일을 붙여넣으세요...",
-                key="xlsx_base64",
-            )
-            xlsx_fname = st.text_input("파일명", value="data.xlsx", key="xlsx_fname")
 
-            if st.button("Base64에서 로드", key="load_xlsx_base64"):
-                try:
-                    xlsx_bytes = base64.b64decode(xlsx_base64.strip())
-                    st.session_state.xlsx_data = xlsx_bytes
-                    st.session_state.xlsx_name = xlsx_fname
-                    st.success(f"✅ 엑셀 파일 로드 완료: {len(xlsx_bytes):,} bytes")
-                except Exception as e:
-                    st.error(f"Base64 디코딩 실패: {e}")
-
-        # 일반 업로드 처리
-        if xlsx_file is not None:
-            try:
-                xlsx_bytes = xlsx_file.getvalue()
-                if len(xlsx_bytes) > 0:
-                    st.session_state.xlsx_data = xlsx_bytes
-                    st.session_state.xlsx_name = xlsx_file.name
-                    st.success(f"✅ {xlsx_file.name}: {len(xlsx_bytes):,} bytes")
-                else:
-                    st.error("⚠️ 업로드된 파일이 0 bytes입니다. 방법 2를 사용해보세요.")
-            except Exception as e:
-                st.error(f"파일 읽기 오류: {e}")
-
-        st.markdown("---")
-
-        # ===== 시트 선택 =====
-
-        def render_left_column():
+def render_left_column():
+    """엑셀/워드 업로드 + 시트 선택 + 버튼."""
     h4("엑셀 파일")
 
     xlsx_file = st.file_uploader(
@@ -399,34 +350,58 @@ def init_session_state():
                 st.error("⚠️ 업로드된 파일이 0 bytes입니다.")
         except Exception as e:
             st.error(f"파일 읽기 오류: {e}")
-            
-        sheet_choice = None
-        if st.session_state.xlsx_data:
-            try:
-                wb_tmp = load_workbook_from_bytes(
-                    st.session_state.xlsx_data, st.session_state.xlsx_name
-                )
-                default_idx = (
-                    wb_tmp.sheetnames.index(TARGET_SHEET)
-                    if TARGET_SHEET in wb_tmp.sheetnames
-                    else 0
-                )
-                sheet_choice = st.selectbox(
-                    "사용할 시트",
-                    wb_tmp.sheetnames,
-                    index=default_idx,
-                    key="sheet_choice",
-                )
-            except Exception as e:
-                st.error(f"엑셀 미리보기 오류: {e}")
 
-        out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
-        gen = st.button("문서 생성", use_container_width=True, type="primary")
+    st.markdown("---")
 
-    # 오른쪽 컬럼은 따로 렌더링
-    render_right_column()
+    h4("워드 템플릿(.docx)")
+
+    docx_tpl = st.file_uploader(
+        "템플릿 업로드",
+        type=["docx"],
+        key="docx_normal",
+        help="Word 템플릿 파일을 업로드하세요.",
+    )
+
+    if docx_tpl is not None:
+        try:
+            docx_bytes = docx_tpl.getvalue()
+            if len(docx_bytes) > 0:
+                st.session_state.docx_data = docx_bytes
+                st.session_state.docx_name = docx_tpl.name
+                st.success(f"✅ {docx_tpl.name}: {len(docx_bytes):,} bytes")
+            else:
+                st.error("⚠️ 업로드된 파일이 0 bytes입니다.")
+        except Exception as e:
+            st.error(f"파일 읽기 오류: {e}")
+
+    st.markdown("---")
+
+    # 시트 선택
+    sheet_choice = None
+    if st.session_state.xlsx_data:
+        try:
+            wb_tmp = load_workbook_from_bytes(
+                st.session_state.xlsx_data, st.session_state.xlsx_name
+            )
+            default_idx = (
+                wb_tmp.sheetnames.index(TARGET_SHEET)
+                if TARGET_SHEET in wb_tmp.sheetnames
+                else 0
+            )
+            sheet_choice = st.selectbox(
+                "사용할 시트",
+                wb_tmp.sheetnames,
+                index=default_idx,
+                key="sheet_choice",
+            )
+        except Exception as e:
+            st.error(f"엑셀 미리보기 오류: {e}")
+
+    out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
+    gen = st.button("문서 생성", use_container_width=True, type="primary")
 
     return sheet_choice, out_name, gen
+
 
 def handle_generate(sheet_choice: Optional[str], out_name: str):
     """문서 생성 버튼 클릭 시 실행 로직."""
@@ -491,8 +466,12 @@ def handle_generate(sheet_choice: Optional[str], out_name: str):
     render_download_buttons(docx_bytes, pdf_bytes, pdf_ok, out_name)
 
 
-def render_download_buttons(docx_bytes: bytes, pdf_bytes: Optional[bytes],
-                            pdf_ok: bool, out_name: str):
+def render_download_buttons(
+    docx_bytes: bytes,
+    pdf_bytes: Optional[bytes],
+    pdf_ok: bool,
+    out_name: str,
+):
     """WORD / PDF / ZIP 다운로드 버튼 렌더링."""
     dl_cols = st.columns(3)
 
