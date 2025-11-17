@@ -216,21 +216,26 @@ def load_uploaded_workbook(uploaded_file) -> Workbook:
             f"현재 업로드된 파일: {fname}"
         )
 
-    # ★ Streamlit UploadedFile 스트림을 맨 앞으로 돌린 뒤 읽기
+    # ★ 무조건 처음으로 돌리기
     try:
         uploaded_file.seek(0)
     except Exception:
         pass
 
     try:
-        data = uploaded_file.read()
+        # ★ getvalue() 사용 (더 안전)
+        data = uploaded_file.getvalue()
     except Exception as exc:
         raise InvalidFileException(
             f"엑셀 파일을 읽는 중 문제가 발생했습니다: {exc}"
         ) from exc
 
-    # ★ 여기서 더 이상 '0바이트 여부'는 체크하지 않고,
-    #    openpyxl이 실제로 열 수 있는지에만 의존한다.
+    # ★ 0바이트 체크 추가 (디버깅용)
+    if len(data) == 0:
+        raise InvalidFileException(
+            "업로드된 파일이 비어있습니다 (0 bytes). 파일을 다시 업로드해주세요."
+        )
+
     try:
         return load_workbook(filename=io.BytesIO(data), data_only=True)
     except BadZipFile as exc:
@@ -239,10 +244,7 @@ def load_uploaded_workbook(uploaded_file) -> Workbook:
             "엑셀에서 열어서 '다른 이름으로 저장 > Excel 통합 문서 (*.xlsx)'로 다시 저장한 뒤 업로드해 보세요."
         ) from exc
     except InvalidFileException as exc:
-        raise InvalidFileException(
-            "이 환경에서 인식할 수 없는 엑셀 형식입니다.\n"
-            "엑셀에서 다시 저장한 뒤 업로드해 보세요."
-        ) from exc
+        raise
     except Exception as exc:
         raise InvalidFileException(
             f"엑셀 파일을 여는 중 오류가 발생했습니다: {exc}"
@@ -342,36 +344,36 @@ with col_left:
 
     # 시트 선택은 업로드 직후 표시
     sheet_choice = None
-        if xlsx_file is not None:
-            try:
-        # ★ 여기서도 seek(0) 명시적으로 호출
-        xlsx_file.seek(0)
-        wb_tmp = load_uploaded_workbook(xlsx_file)
-        default_idx = (
-            wb_tmp.sheetnames.index(TARGET_SHEET)
-            if TARGET_SHEET in wb_tmp.sheetnames
-            else 0
-        )
-        sheet_choice = st.selectbox(
-            "사용할 시트",
-            wb_tmp.sheetnames,
-            index=default_idx,
-            key="sheet_choice",
-        )
-        # ★ 다시 처음으로 되돌리기 (중요!)
-        xlsx_file.seek(0)
-    except InvalidFileException as e:
-        st.error("지원하지 않는 엑셀 형식입니다. XLSX 파일을 업로드하세요.")
-        small_note(str(e))
-        xlsx_file = None
-    except Exception as e:
-        st.warning("엑셀 미리보기 중 문제가 발생했습니다. 생성은 가능할 수 있습니다.")
-        small_note(str(e))
-        # ★ 오류가 나도 seek(0) 시도
+    if xlsx_file is not None:
         try:
+            # ★ 여기서도 seek(0) 명시적으로 호출
             xlsx_file.seek(0)
-        except:
-            pass
+            wb_tmp = load_uploaded_workbook(xlsx_file)
+            default_idx = (
+                wb_tmp.sheetnames.index(TARGET_SHEET)
+                if TARGET_SHEET in wb_tmp.sheetnames
+                else 0
+            )
+            sheet_choice = st.selectbox(
+                "사용할 시트",
+                wb_tmp.sheetnames,
+                index=default_idx,
+                key="sheet_choice",
+            )
+            # ★ 다시 처음으로 되돌리기 (중요!)
+            xlsx_file.seek(0)
+        except InvalidFileException as e:
+            st.error("지원하지 않는 엑셀 형식입니다. XLSX 파일을 업로드하세요.")
+            small_note(str(e))
+            xlsx_file = None
+        except Exception as e:
+            st.warning("엑셀 미리보기 중 문제가 발생했습니다. 생성은 가능할 수 있습니다.")
+            small_note(str(e))
+            # ★ 오류가 나도 seek(0) 시도
+            try:
+                xlsx_file.seek(0)
+            except:
+                pass
 
     out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
 
@@ -394,6 +396,8 @@ if gen:
     with st.status("문서 생성 중...", expanded=True) as status:
         try:
             st.write("1) 엑셀 로드")
+            # ★ 생성 직전에도 한 번 더 seek(0)
+            xlsx_file.seek(0)
             wb = load_uploaded_workbook(xlsx_file)
             ws = (
                 wb[sheet_choice]
