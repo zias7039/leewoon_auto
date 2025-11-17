@@ -14,6 +14,7 @@ from docx.table import _Cell
 from docx.text.paragraph import Paragraph
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
+
 from ui_style import inject as inject_style, h4, section_caption, small_note
 
 # docx → pdf (환경에 없으면 PDF는 ZIP에 안 넣음)
@@ -91,7 +92,7 @@ def apply_inline_format(value, fmt: Optional[str]) -> str:
     if not fmt or not fmt.strip():
         return value_to_text(value)
 
-    # 날짜 포맷 (YYYY/MM/DD 등)
+    # 날짜 포맷
     if any(tok in fmt for tok in ("YYYY", "MM", "DD")):
         if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip()):
             value = datetime.strptime(value.strip(), "%Y-%m-%d").date()
@@ -238,100 +239,141 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
         pass
     return None
 
-# ---------- Streamlit ----------
+
+# ---------- Streamlit UI ----------
 
 def init_session_state():
     for key in ("xlsx_data", "xlsx_name", "docx_data", "docx_name"):
         if key not in st.session_state:
             st.session_state[key] = None
 
+
+def render_top_bar() -> bool:
+    """상단 고정 ZIP 생성 버튼."""
+    st.markdown('<div class="top-bar"><div class="top-bar-inner">', unsafe_allow_html=True)
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown(
+            '<div class="top-bar-title">납입요청서 일괄 생성 · ZIP 다운로드</div>',
+            unsafe_allow_html=True,
+        )
+    with col2:
+        gen_top = st.button("ZIP 생성", key="btn_top", use_container_width=True)
+    st.markdown("</div></div>", unsafe_allow_html=True)
+    return gen_top
+
+
 def render_inputs():
+    """2열 레이아웃 입력 카드."""
     st.markdown('<div class="app-card">', unsafe_allow_html=True)
 
-    h4("엑셀 파일")
-    section_caption("납입요청서 자동생성에 필요한 데이터가 들어있는 엑셀 파일을 업로드하세요.")
-    xlsx_file = st.file_uploader("엑셀 업로드", type=["xlsx", "xlsm"], key="xlsx")
+    col_left, col_right = st.columns(2)
 
-    if xlsx_file:
-        data = xlsx_file.getvalue()
-        if data:
-            st.session_state.xlsx_data = data
-            st.session_state.xlsx_name = xlsx_file.name
-            st.success(f"{xlsx_file.name}: {len(data):,} bytes")
-        else:
-            st.error("엑셀 파일이 0 bytes입니다.")
+    # 왼쪽: 엑셀 업로드
+    with col_left:
+        h4("엑셀 파일")
+        section_caption("청약/납입 데이터가 들어있는 엑셀 파일")
+        xlsx_file = st.file_uploader("엑셀 업로드", type=["xlsx", "xlsm"], key="xlsx")
+        if xlsx_file is not None:
+            try:
+                data = xlsx_file.getvalue()
+                if data:
+                    st.session_state.xlsx_data = data
+                    st.session_state.xlsx_name = xlsx_file.name
+                    st.success(f"{xlsx_file.name}: {len(data):,} bytes")
+                else:
+                    st.error("엑셀 파일이 0 bytes입니다.")
+            except Exception as e:
+                st.error(f"엑셀 파일 읽기 오류: {e}")
+
+    # 오른쪽: 워드 업로드
+    with col_right:
+        h4("워드 템플릿 (.docx)")
+        section_caption("{{A1}}, {{B5|#,###}}, {{C3|YYYY.MM.DD}} 태그가 포함된 템플릿")
+        docx_file = st.file_uploader("워드 템플릿 업로드", type=["docx"], key="docx")
+        if docx_file is not None:
+            try:
+                data = docx_file.getvalue()
+                if data:
+                    st.session_state.docx_data = data
+                    st.session_state.docx_name = docx_file.name
+                    st.success(f"{docx_file.name}: {len(data):,} bytes")
+                else:
+                    st.error("워드 템플릿이 0 bytes입니다.")
+            except Exception as e:
+                st.error(f"워드 파일 읽기 오류: {e}")
 
     st.markdown("---")
 
-    h4("워드 템플릿 (.docx)")
-    section_caption("{{A1}}, {{B5|#,###}}, {{C3|YYYY.MM.DD}} 같은 치환 태그가 들어있는 템플릿")
-    docx_file = st.file_uploader("워드 템플릿 업로드", type=["docx"], key="docx")
-
-    if docx_file:
-        data = docx_file.getvalue()
-        if data:
-            st.session_state.docx_data = data
-            st.session_state.docx_name = docx_file.name
-            st.success(f"{docx_file.name}: {len(data):,} bytes")
-        else:
-            st.error("워드 템플릿이 0 bytes입니다.")
-
-    st.markdown("---")
-
+    # 시트 선택 + 출력 파일명 + 하단 ZIP 버튼
     sheet_choice = None
     if st.session_state.xlsx_data:
         try:
-            wb = load_workbook_from_bytes(st.session_state.xlsx_data, st.session_state.xlsx_name)
+            wb = load_workbook_from_bytes(
+                st.session_state.xlsx_data, st.session_state.xlsx_name
+            )
             sheets = wb.sheetnames
             index = sheets.index(TARGET_SHEET) if TARGET_SHEET in sheets else 0
-
-            h4("사용할 시트 선택")
-            sheet_choice = st.selectbox("시트", sheets, index=index)
+            h4("사용할 시트")
+            sheet_choice = st.selectbox("시트 선택", sheets, index=index)
         except Exception as e:
-            st.error(f"시트 로드 오류: {e}")
-
-    st.markdown("---")
+            st.error(f"엑셀 시트 읽기 오류: {e}")
 
     h4("출력 파일명")
     out_name = st.text_input("파일명", value=DEFAULT_OUT)
 
-    generate = st.button("ZIP 생성", use_container_width=True)
+    gen_bottom = st.button("ZIP 생성", key="btn_bottom", use_container_width=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    return sheet_choice, out_name, generate
+    return sheet_choice, out_name, gen_bottom
+
 
 def handle_generate(sheet_choice: Optional[str], out_name: str):
     if not st.session_state.xlsx_data or not st.session_state.docx_data:
-        st.error("엑셀과 템플릿을 모두 로드하세요.")
+        st.error("엑셀과 워드 템플릿을 모두 업로드하세요.")
         return
 
+    progress = st.progress(0)
     try:
-        wb = load_workbook_from_bytes(
-            st.session_state.xlsx_data, st.session_state.xlsx_name
-        )
-        ws = (
-            wb[sheet_choice]
-            if sheet_choice
-            else (
-                wb[TARGET_SHEET]
-                if TARGET_SHEET in wb.sheetnames
-                else wb[wb.sheetnames[0]]
+        with st.spinner("ZIP 생성 중입니다..."):
+            # 1) 엑셀 로드
+            progress.progress(10)
+            wb = load_workbook_from_bytes(
+                st.session_state.xlsx_data, st.session_state.xlsx_name
             )
-        )
+            ws = (
+                wb[sheet_choice]
+                if sheet_choice
+                else (
+                    wb[TARGET_SHEET]
+                    if TARGET_SHEET in wb.sheetnames
+                    else wb[wb.sheetnames[0]]
+                )
+            )
 
-        doc = Document(io.BytesIO(st.session_state.docx_data))
-        replacer = make_replacer(ws)
-        replace_everywhere(doc, replacer)
+            # 2) 워드 템플릿 로드
+            progress.progress(35)
+            doc = Document(io.BytesIO(st.session_state.docx_data))
 
-        buf = io.BytesIO()
-        doc.save(buf)
-        buf.seek(0)
-        docx_bytes = buf.getvalue()
+            # 3) 치환
+            replacer = make_replacer(ws)
+            replace_everywhere(doc, replacer)
+            progress.progress(60)
 
-        pdf_bytes = convert_docx_to_pdf_bytes(docx_bytes)
-        pdf_ok = pdf_bytes is not None
+            # 4) DOCX 저장
+            buf = io.BytesIO()
+            doc.save(buf)
+            buf.seek(0)
+            docx_bytes = buf.getvalue()
+            progress.progress(75)
 
+            # 5) PDF 변환 (가능한 경우)
+            pdf_bytes = convert_docx_to_pdf_bytes(docx_bytes)
+            pdf_ok = pdf_bytes is not None
+            progress.progress(90)
+
+        progress.progress(100)
     except InvalidFileException as e:
         st.error(str(e))
         return
@@ -351,18 +393,15 @@ def render_zip_download(
 ):
     zip_buf = io.BytesIO()
     with ZipFile(zip_buf, "w", ZIP_DEFLATED) as zf:
-        # WORD
         docx_name = ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT
         zf.writestr(docx_name, docx_bytes)
 
-        # PDF (가능한 경우에만)
         if pdf_ok and pdf_bytes:
             pdf_name = ensure_pdf(out_name)
             zf.writestr(pdf_name, pdf_bytes)
 
     zip_buf.seek(0)
 
-    # ZIP 파일명: 출력파일명 기반 + "_both.zip"
     base_zip_name = (ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT)
     base_zip_name = base_zip_name.replace(".docx", "")
     zip_name = f"{base_zip_name}_both.zip"
@@ -379,14 +418,17 @@ def main():
     inject_style()
     init_session_state()
 
-    st.title("🧾 납입요청서 자동 생성 (ZIP)")
+    st.title("납입요청서 자동 생성")
     st.markdown(
-        '<div class="app-subtitle">엑셀 + 워드 템플릿을 합쳐 납입요청서 DOCX/PDF를 만들고 ZIP으로 내려받는 도구입니다.</div>',
+        '<div class="app-subtitle">엑셀 데이터와 워드 템플릿을 결합해 납입요청서 DOCX/PDF를 만들고, ZIP으로 일괄 내려받는 도구입니다.</div>',
         unsafe_allow_html=True,
     )
 
-    sheet_choice, out_name, gen = render_inputs()
-    if gen:
+    gen_top = render_top_bar()  # 상단 고정 ZIP 버튼
+    sheet_choice, out_name, gen_bottom = render_inputs()  # 2열 레이아웃 입력
+
+    generate = gen_top or gen_bottom
+    if generate:
         handle_generate(sheet_choice, out_name)
 
 
