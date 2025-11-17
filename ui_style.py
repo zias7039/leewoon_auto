@@ -105,11 +105,11 @@ div[data-testid="stMarkdownContainer"] p:empty {
 def inject():
     st.markdown(f"<style>{BASE_CSS}</style>", unsafe_allow_html=True)
 
-def h4(text):
+def h4(text: str):
     st.markdown(f'<div class="h4">{text}</div>', unsafe_allow_html=True)
 
-def section_caption(text):
+def section_caption(text: str):
     st.markdown(f'<div class="section-caption">{text}</div>', unsafe_allow_html=True)
 
-def small_note(text):
+def small_note(text: str):
     st.markdown(f'<div class="section-caption">{text}</div>', unsafe_allow_html=True)
