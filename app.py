@@ -17,7 +17,7 @@ from openpyxl.utils.exceptions import InvalidFileException
 
 from ui_style import inject as inject_style, h4
 
-# docx → pdf (환경에 없으면 PDF는 비활성화됨)
+# docx → pdf (환경에 없으면 PDF는 ZIP에 안 넣음)
 try:
     from docx2pdf import convert as docx2pdf_convert
 except Exception:
@@ -203,6 +203,7 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
             with open(in_path, "wb") as f:
                 f.write(docx_bytes)
 
+            # 1) MS Word (docx2pdf)
             if docx2pdf_convert is not None:
                 try:
                     docx2pdf_convert(in_path, out_path)
@@ -212,6 +213,7 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
                 except Exception:
                     pass
 
+            # 2) LibreOffice
             if has_soffice():
                 try:
                     subprocess.run(
@@ -292,7 +294,7 @@ def render_inputs():
             st.error(f"엑셀 시트 읽기 오류: {e}")
 
     out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
-    gen = st.button("문서 생성", use_container_width=True, type="primary")
+    gen = st.button("ZIP 생성", use_container_width=True, type="primary")
 
     return sheet_choice, out_name, gen
 
@@ -335,62 +337,46 @@ def handle_generate(sheet_choice: Optional[str], out_name: str):
         st.exception(e)
         return
 
-    st.success("문서가 준비되었습니다.")
-    render_downloads(docx_bytes, pdf_bytes, pdf_ok, out_name)
+    st.success("ZIP 파일이 준비되었습니다.")
+    render_zip_download(docx_bytes, pdf_bytes, pdf_ok, out_name)
 
 
-def render_downloads(
+def render_zip_download(
     docx_bytes: bytes,
     pdf_bytes: Optional[bytes],
     pdf_ok: bool,
     out_name: str,
 ):
-    c1, c2, c3 = st.columns(3)
+    zip_buf = io.BytesIO()
+    with ZipFile(zip_buf, "w", ZIP_DEFLATED) as zf:
+        # WORD
+        docx_name = ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT
+        zf.writestr(docx_name, docx_bytes)
 
-    with c1:
-        st.download_button(
-            "WORD 다운로드",
-            data=docx_bytes,
-            file_name=ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT,
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            use_container_width=True,
-        )
+        # PDF (가능한 경우에만)
+        if pdf_ok and pdf_bytes:
+            pdf_name = ensure_pdf(out_name)
+            zf.writestr(pdf_name, pdf_bytes)
 
-    with c2:
-        st.download_button(
-            "PDF 다운로드",
-            data=(pdf_bytes or b""),
-            file_name=ensure_pdf(out_name),
-            mime="application/pdf",
-            disabled=not pdf_ok,
-            help=None
-            if pdf_ok
-            else "PDF 변환 엔진(Word 또는 LibreOffice)이 없는 환경입니다.",
-            use_container_width=True,
-        )
+    zip_buf.seek(0)
 
-    with c3:
-        zip_buf = io.BytesIO()
-        with ZipFile(zip_buf, "w", ZIP_DEFLATED) as zf:
-            zf.writestr(
-                ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT,
-                docx_bytes,
-            )
-            if pdf_ok and pdf_bytes:
-                zf.writestr(ensure_pdf(out_name), pdf_bytes)
-        zip_buf.seek(0)
-        st.download_button(
-            "ZIP (WORD+PDF)",
-            data=zip_buf,
-            file_name=ensure_pdf(out_name).replace(".pdf", "") + "_both.zip",
-            use_container_width=True,
-        )
+    # ZIP 파일명: 출력파일명 기반 + "_both.zip"
+    base_zip_name = (ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT)
+    base_zip_name = base_zip_name.replace(".docx", "")
+    zip_name = f"{base_zip_name}_both.zip"
+
+    st.download_button(
+        "ZIP 다운로드 (WORD + PDF)",
+        data=zip_buf,
+        file_name=zip_name,
+        use_container_width=True,
+    )
 
 
 def main():
     inject_style()
     init_session_state()
-    st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
+    st.title("🧾 납입요청서 자동 생성 (ZIP)")
     sheet_choice, out_name, gen = render_inputs()
     if gen:
         handle_generate(sheet_choice, out_name)
