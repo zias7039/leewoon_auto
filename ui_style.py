@@ -113,70 +113,70 @@ input[type="text"]:focus {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
 }
 
-/* ===== Excel 전용 테마 (첫 번째 업로더) ===== */
-[data-testid="stForm"] [data-testid="stFileUploader"]:first-of-type [data-testid="stFileUploaderDropzone"] {
+/* ===== Excel 전용 테마 (excel-uploader 래퍼) ===== */
+.excel-uploader [data-testid="stFileUploaderDropzone"] {
     border: 2px dashed rgba(33, 115, 70, 0.6) !important;
     background: linear-gradient(135deg, rgba(33, 115, 70, 0.08) 0%, rgba(33, 115, 70, 0.15) 100%) !important;
 }
 
-[data-testid="stForm"] [data-testid="stFileUploader"]:first-of-type [data-testid="stFileUploaderDropzone"]:hover {
+.excel-uploader [data-testid="stFileUploaderDropzone"]:hover {
     border-color: rgba(33, 115, 70, 0.9) !important;
     background: linear-gradient(135deg, rgba(33, 115, 70, 0.15) 0%, rgba(33, 115, 70, 0.25) 100%) !important;
     box-shadow: 0 6px 24px rgba(33, 115, 70, 0.25) !important;
 }
 
-[data-testid="stForm"] [data-testid="stFileUploader"]:first-of-type [data-testid="stFileUploaderDropzone"] p,
-[data-testid="stForm"] [data-testid="stFileUploader"]:first-of-type [data-testid="stFileUploaderDropzone"] span {
+.excel-uploader [data-testid="stFileUploaderDropzone"] p,
+.excel-uploader [data-testid="stFileUploaderDropzone"] span {
     color: rgba(33, 115, 70, 1) !important;
     font-weight: 600 !important;
 }
 
-[data-testid="stForm"] [data-testid="stFileUploader"]:first-of-type [data-testid="stFileUploaderDropzone"] small {
+.excel-uploader [data-testid="stFileUploaderDropzone"] small {
     color: rgba(33, 115, 70, 0.75) !important;
 }
 
-[data-testid="stForm"] [data-testid="stFileUploader"]:first-of-type button {
+.excel-uploader [data-testid="stFileUploader"] button {
     background: linear-gradient(135deg, #217346 0%, #1a5c38 100%) !important;
     border: 1px solid rgba(33, 115, 70, 0.8) !important;
     color: white !important;
     font-weight: 600 !important;
 }
 
-[data-testid="stForm"] [data-testid="stFileUploader"]:first-of-type button:hover {
+.excel-uploader [data-testid="stFileUploader"] button:hover {
     background: linear-gradient(135deg, #25824f 0%, #1e6841 100%) !important;
     box-shadow: 0 4px 16px rgba(33, 115, 70, 0.35) !important;
 }
 
-/* ===== Word 전용 테마 (두 번째 업로더) ===== */
-[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) [data-testid="stFileUploaderDropzone"] {
+/* ===== Word 전용 테마 (word-uploader 래퍼) ===== */
+.word-uploader [data-testid="stFileUploaderDropzone"] {
     border: 2px dashed rgba(24, 90, 189, 0.6) !important;
     background: linear-gradient(135deg, rgba(24, 90, 189, 0.08) 0%, rgba(24, 90, 189, 0.15) 100%) !important;
 }
 
-[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) [data-testid="stFileUploaderDropzone"]:hover {
+.word-uploader [data-testid="stFileUploaderDropzone"]:hover {
     border-color: rgba(24, 90, 189, 0.9) !important;
     background: linear-gradient(135deg, rgba(24, 90, 189, 0.15) 0%, rgba(24, 90, 189, 0.25) 100%) !important;
     box-shadow: 0 6px 24px rgba(24, 90, 189, 0.25) !important;
 }
 
-[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) [data-testid="stFileUploaderDropzone"] p,
-[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) [data-testid="stFileUploaderDropzone"] span {
+.word-uploader [data-testid="stFileUploaderDropzone"] p,
+.word-uploader [data-testid="stFileUploaderDropzone"] span {
     color: rgba(24, 90, 189, 1) !important;
     font-weight: 600 !important;
 }
 
-[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) [data-testid="stFileUploaderDropzone"] small {
+.word-uploader [data-testid="stFileUploaderDropzone"] small {
     color: rgba(24, 90, 189, 0.75) !important;
 }
 
-[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) button {
+.word-uploader [data-testid="stFileUploader"] button {
     background: linear-gradient(135deg, #185ABD 0%, #1349a0 100%) !important;
     border: 1px solid rgba(24, 90, 189, 0.8) !important;
     color: white !important;
     font-weight: 600 !important;
 }
 
-[data-testid="stForm"] [data-testid="stFileUploader"]:nth-of-type(2) button:hover {
+.word-uploader [data-testid="stFileUploader"] button:hover {
     background: linear-gradient(135deg, #1c66d1 0%, #1552b3 100%) !important;
     box-shadow: 0 4px 16px rgba(24, 90, 189, 0.35) !important;
 }
@@ -279,37 +279,6 @@ def inject():
     </style>
     """, unsafe_allow_html=True)
     st.markdown(f"<style>{BASE_CSS}</style>", unsafe_allow_html=True)
-    
-    # JavaScript로 클래스 추가
-    st.markdown("""
-    <script>
-    // 페이지 로드 후 클래스 추가
-    setTimeout(function() {
-        const fileUploaders = document.querySelectorAll('[data-testid="stFileUploader"]');
-        
-        if (fileUploaders.length >= 2) {
-            // 첫 번째는 Excel
-            fileUploaders[0].classList.add('excel-uploader');
-            // 두 번째는 Word
-            fileUploaders[1].classList.add('word-uploader');
-        }
-        
-        // MutationObserver로 동적 변경 감지
-        const observer = new MutationObserver(function(mutations) {
-            const uploaders = document.querySelectorAll('[data-testid="stFileUploader"]');
-            if (uploaders.length >= 2) {
-                uploaders[0].classList.add('excel-uploader');
-                uploaders[1].classList.add('word-uploader');
-            }
-        });
-        
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-    }, 100);
-    </script>
-    """, unsafe_allow_html=True)
 
 def h4(text):
     """커스텀 h4 제목을 렌더링합니다."""
