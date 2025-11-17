@@ -1,179 +1,122 @@
 import streamlit as st
 
-EXCEL_GREEN = "#217346"  # Excel signature green
-WORD_BLUE = "#185ABD"    # Word blue
+EXCEL_GREEN = "#217346"
+WORD_BLUE = "#185ABD"
 
 BASE_CSS = """
 /* 기본 레이아웃 */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
+
 .block-container {
-    padding-top: 1.2rem;
-    max-width: 1200px;
+    padding-top: 1.5rem;
+    max-width: 900px;
+}
+
+/* 제목 아래 설명 간격 */
+h1 {
+    margin-bottom: 0.2rem;
+}
+.app-subtitle {
+    font-size: 0.9rem;
+    color: rgba(100, 116, 139, 0.95);
+    margin-bottom: 1.2rem;
+}
+
+/* 카드 레이아웃 */
+.app-card {
+    background: rgba(248, 250, 252, 0.95);
+    border-radius: 16px;
+    padding: 18px 18px 14px;
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.06);
+    margin-bottom: 1rem;
+}
+
+/* 섹션 제목 */
+.h4 {
+    font-weight: 700;
+    font-size: 1rem;
+    margin: 0 0 0.35rem;
+    color: rgba(15, 23, 42, 0.9);
+}
+.section-caption {
+    font-size: 0.8rem;
+    color: rgba(100, 116, 139, 0.9);
+    margin-bottom: 0.6rem;
+}
+
+/* 업로더 라벨 색감 약간 조정 */
+[data-testid="stFileUploader"] label {
+    font-size: 0.88rem;
+    color: rgba(71, 85, 105, 0.98);
 }
 
 /* 버튼 스타일 */
-.stButton>button {
+.stButton > button {
     height: 44px;
-    border-radius: 10px;
-    font-weight: 500;
-    transition: all 0.2s ease;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    border: none;
+    background: linear-gradient(135deg, #2563EB, #1D4ED8);
+    color: white;
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25);
+    transition: all 0.18s ease-out;
 }
-.stButton>button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-[data-testid="stDownloadButton"] > button {
-    min-width: 220px;
+.stButton > button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(37, 99, 235, 0.28);
 }
 
-/* 폼 스타일 */
-[data-testid="stForm"] {
-    background: rgba(248, 250, 252, 0.5);
-    border: 1px solid rgba(226, 232, 240, 0.8);
-    border-radius: 16px;
-    padding: 24px;
+/* ZIP 다운로드 버튼도 동일 스타일 */
+[data-testid="stDownloadButton"] > button {
+    height: 44px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.95rem;
 }
 
 /* 텍스트 입력 */
 input[type="text"] {
-    border-radius: 8px !important;
-    border: 1px solid rgba(203, 213, 225, 0.8) !important;
-    padding: 10px 12px !important;
+    border-radius: 10px !important;
+    border: 1px solid rgba(203, 213, 225, 0.9) !important;
+    padding: 9px 11px !important;
 }
 input[type="text"]:focus {
-    border-color: rgba(59, 130, 246, 0.5) !important;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    border-color: rgba(37, 99, 235, 0.8) !important;
+    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.5) !important;
 }
 
-/* 셀렉트박스 */
-[data-baseweb="select"] {
-    border-radius: 8px;
+/* 구분선 간격 */
+hr {
+    margin: 0.9rem 0;
 }
 
-/* 소제목 */
-.h4 {
-    font-weight: 700;
-    font-size: 1.05rem;
-    margin: 0.25rem 0 0.75rem;
-    color: rgba(15, 23, 42, 0.9);
-}
-
-/* 작은 노트 */
-.small-note {
-    font-size: 0.85rem;
-    color: rgba(100, 116, 139, 0.8);
-}
-
-[data-testid="stFileUploaderDropzone"] p {
-    color: rgba(71, 85, 105, 0.9) !important;
-    font-size: 0.95rem !important;
-}
-[data-testid="stFileUploaderDropzone"] small {
-    color: rgba(100, 116, 139, 0.7) !important;
-    font-size: 0.85rem !important;
-}
-
-/* 상태 메시지 */
-.stAlert {
-    border-radius: 12px;
-    border-left-width: 4px;
-}
-[data-testid="stStatusWidget"] {
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-/* Expander */
-[data-testid="stExpander"] {
-    border-radius: 10px;
-    border: 1px solid rgba(226, 232, 240, 0.8);
-}
-[data-testid="stExpander"] summary {
-    border-radius: 10px;
-}
-
-/* 컬럼 간격 */
-[data-testid="column"] {
-    padding: 0 8px;
-}
-
-/* 다크모드 */
+/* 다크모드 간단 대응 */
 @media (prefers-color-scheme: dark) {
-    [data-testid="stForm"] {
-        background: rgba(30, 41, 59, 0.4);
-        border-color: rgba(51, 65, 85, 0.6);
-    }
-    [data-testid="stFileUploaderDropzone"] {
-        background: rgba(30, 41, 59, 0.4) !important;
-        border-color: rgba(71, 85, 105, 0.5) !important;
-    }
-    [data-testid="stFileUploaderDropzone"]:hover {
-        background: rgba(30, 41, 59, 0.6) !important;
-        border-color: rgba(100, 116, 139, 0.7) !important;
+    .app-card {
+        background: rgba(15, 23, 42, 0.9);
+        border-color: rgba(51, 65, 85, 0.9);
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
     }
     .h4 {
-        color: rgba(248, 250, 252, 0.9);
+        color: rgba(248, 250, 252, 0.95);
     }
-}
-
-/* 애니메이션 */
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
+    .section-caption {
+        color: rgba(148, 163, 184, 0.9);
     }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-[data-testid="stFileUploader"] {
-    animation: fadeIn 0.3s ease-out;
-}
-
-/* 스크롤바 */
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-::-webkit-scrollbar-track {
-    background: rgba(241, 245, 249, 0.5);
-    border-radius: 4px;
-}
-::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.5);
-    border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-    background: rgba(100, 116, 139, 0.7);
 }
 """
 
-
 def inject():
-    """CSS 스타일을 페이지에 주입."""
-    st.markdown(
-        """
-        <style>
-          :root {
-            --excel-green: #217346;
-            --word-blue: #185ABD;
-            --border-radius: 12px;
-            --transition: all 0.2s ease;
-          }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
     st.markdown(f"<style>{BASE_CSS}</style>", unsafe_allow_html=True)
 
-
 def h4(text: str):
-    """커스텀 h4 제목."""
     st.markdown(f'<div class="h4">{text}</div>', unsafe_allow_html=True)
 
+def section_caption(text: str):
+    st.markdown(f'<div class="section-caption">{text}</div>', unsafe_allow_html=True)
 
 def small_note(text: str):
-    """작은 노트 텍스트."""
-    st.markdown(f'<div class="small-note">{text}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-caption">{text}</div>', unsafe_allow_html=True)
