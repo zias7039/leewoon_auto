@@ -1,105 +1,97 @@
 import streamlit as st
 
-EXCEL_GREEN = "#217346"
-WORD_BLUE = "#185ABD"
-
 BASE_CSS = """
 /* 기본 레이아웃 */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 
 .block-container {
-    padding-top: 1.5rem;
-    max-width: 900px;
+    padding-top: 1.6rem;
+    max-width: 860px;
+    margin: auto;
 }
 
-/* 제목 아래 설명 간격 */
-h1 {
-    margin-bottom: 0.2rem;
-}
-
+/* 서브타이틀 */
 .app-subtitle {
-    font-size: 0.9rem;
-    color: rgba(100, 116, 139, 0.95);
-    margin-bottom: 1.5rem;   /* 줄바꿈 대신 margin으로 해결 */
+    font-size: 0.92rem;
+    color: rgba(148, 163, 184, 0.95);
+    margin-bottom: 1.2rem !important;
 }
 
-/* 카드 레이아웃 */
+/* 카드 스타일 */
 .app-card {
-    background: rgba(248, 250, 252, 0.95);
-    border-radius: 16px;
-    padding: 18px 18px 14px;
+    background: rgba(248, 250, 252, 0.9);
+    border-radius: 18px;
+    padding: 22px 25px 20px;
     border: 1px solid rgba(226, 232, 240, 0.9);
-    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.06);
-    margin-bottom: 1rem;
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.06);
+    margin-bottom: 1.4rem;
 }
 
-/* 섹션 제목 */
+/* 제목 */
 .h4 {
+    font-size: 1.02rem;
     font-weight: 700;
-    font-size: 1rem;
-    margin: 0 0 0.35rem;
-    color: rgba(15, 23, 42, 0.9);
+    margin: 0 0 0.45rem;
+    color: rgba(30, 41, 59, 0.95);
 }
+
+/* 설명 캡션 */
 .section-caption {
-    font-size: 0.8rem;
-    color: rgba(100, 116, 139, 0.9);
-    margin-bottom: 0.6rem;
+    font-size: 0.82rem;
+    color: rgba(100, 116, 139, 0.85);
+    margin-bottom: 0.7rem !important;
 }
 
-/* 업로더 라벨 색감 약간 조정 */
-[data-testid="stFileUploader"] label {
-    font-size: 0.88rem;
-    color: rgba(71, 85, 105, 0.98);
+/* 업로더 스타일 안정화 */
+[data-testid="stFileUploader"] {
+    margin-top: 0.1rem;
+}
+[data-testid="stFileUploader"] section {
+    padding: 12px 10px;
+    border-radius: 14px;
 }
 
-/* 버튼 스타일 */
-.stButton > button {
-    height: 44px;
-    border-radius: 999px;
-    font-weight: 600;
-    font-size: 0.95rem;
-    border: none;
-    background: linear-gradient(135deg, #2563EB, #1D4ED8);
-    color: white;
-    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25);
-    transition: all 0.18s ease-out;
-}
-.stButton > button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 10px 22px rgba(37, 99, 235, 0.28);
-}
-
-/* ZIP 다운로드 버튼도 동일 스타일 */
-[data-testid="stDownloadButton"] > button {
-    height: 44px;
-    border-radius: 999px;
-    font-weight: 600;
-    font-size: 0.95rem;
-}
-
-/* 텍스트 입력 */
+/* 텍스트 입력 폭 조정 */
 input[type="text"] {
     border-radius: 10px !important;
+    padding: 10px 12px !important;
     border: 1px solid rgba(203, 213, 225, 0.9) !important;
-    padding: 9px 11px !important;
 }
 input[type="text"]:focus {
-    border-color: rgba(37, 99, 235, 0.8) !important;
-    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.5) !important;
+    border-color: rgba(37, 99, 235, 0.75) !important;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25) !important;
 }
 
-/* 구분선 간격 */
-hr {
-    margin: 0.9rem 0;
+/* 버튼 */
+.stButton > button, 
+[data-testid="stDownloadButton"] > button {
+    height: 46px !important;
+    border-radius: 999px !important;
+    font-weight: 600 !important;
+    font-size: 0.95rem !important;
+    background: linear-gradient(135deg, #2563EB, #1D4ED8) !important;
+    color: white !important;
+    border: none !important;
+    transition: all .18s ease-out;
+}
+.stButton > button:hover,
+[data-testid="stDownloadButton"] > button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(37, 99, 235, .25);
 }
 
-/* 다크모드 간단 대응 */
+/* 빈 p 태그 제거 (애매한 막대 문제 해결) */
+div[data-testid="stMarkdownContainer"] p:empty {
+    display: none !important;
+}
+
+/* 다크모드 */
 @media (prefers-color-scheme: dark) {
     .app-card {
-        background: rgba(15, 23, 42, 0.9);
-        border-color: rgba(51, 65, 85, 0.9);
-        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+        background: rgba(30, 41, 59, 0.65);
+        backdrop-filter: blur(4px);
+        border-color: rgba(71, 85, 105, 0.5);
     }
     .h4 {
         color: rgba(248, 250, 252, 0.95);
@@ -113,11 +105,8 @@ hr {
 def inject():
     st.markdown(f"<style>{BASE_CSS}</style>", unsafe_allow_html=True)
 
-def h4(text: str):
+def h4(text):
     st.markdown(f'<div class="h4">{text}</div>', unsafe_allow_html=True)
 
-def section_caption(text: str):
-    st.markdown(f'<div class="section-caption">{text}</div>', unsafe_allow_html=True)
-
-def small_note(text: str):
+def section_caption(text):
     st.markdown(f'<div class="section-caption">{text}</div>', unsafe_allow_html=True)
