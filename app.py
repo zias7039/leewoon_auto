@@ -328,22 +328,6 @@ def init_session_state():
     if "docx_name" not in st.session_state:
         st.session_state.docx_name = None
 
-
-def render_left_column():
-    """왼쪽 컬럼: 파일 업로드 / 시트 선택 / 실행 버튼."""
-    col_left, col_right = st.columns([1.25, 1])
-
-    with col_left:
-        # ===== 엑셀 업로드 =====
-        h4("엑셀 파일")
-
-        xlsx_file = st.file_uploader(
-            "엑셀 업로드 (방법 1)",
-            type=["xlsx", "xlsm"],
-            key="xlsx_normal",
-            help="일반 파일 업로드",
-        )
-
         # Base64 업로드
         with st.expander("📋 또는 Base64로 붙여넣기 (방법 2)", expanded=False):
             st.markdown(
@@ -392,50 +376,6 @@ def render_left_column():
 
         st.markdown("---")
 
-        # ===== 워드 템플릿 업로드 =====
-        h4("워드 템플릿(.docx)")
-
-        docx_tpl = st.file_uploader(
-            "템플릿 업로드 (방법 1)",
-            type=["docx"],
-            key="docx_normal",
-            help="Word 템플릿 파일",
-        )
-
-        with st.expander("📋 또는 Base64로 붙여넣기 (방법 2)", expanded=False):
-            docx_base64 = st.text_area(
-                "Base64 텍스트",
-                height=100,
-                placeholder="Base64 인코딩된 워드 파일...",
-                key="docx_base64",
-            )
-            docx_fname = st.text_input(
-                "파일명", value="template.docx", key="docx_fname"
-            )
-
-            if st.button("Base64에서 로드", key="load_docx_base64"):
-                try:
-                    docx_bytes = base64.b64decode(docx_base64.strip())
-                    st.session_state.docx_data = docx_bytes
-                    st.session_state.docx_name = docx_fname
-                    st.success(f"✅ 워드 템플릿 로드 완료: {len(docx_bytes):,} bytes")
-                except Exception as e:
-                    st.error(f"Base64 디코딩 실패: {e}")
-
-        if docx_tpl is not None:
-            try:
-                docx_bytes = docx_tpl.getvalue()
-                if len(docx_bytes) > 0:
-                    st.session_state.docx_data = docx_bytes
-                    st.session_state.docx_name = docx_tpl.name
-                    st.success(f"✅ {docx_tpl.name}: {len(docx_bytes):,} bytes")
-                else:
-                    st.error("⚠️ 업로드된 파일이 0 bytes입니다. 방법 2를 사용해보세요.")
-            except Exception as e:
-                st.error(f"파일 읽기 오류: {e}")
-
-        st.markdown("---")
-
         # ===== 시트 선택 =====
         sheet_choice = None
         if st.session_state.xlsx_data:
@@ -464,38 +404,6 @@ def render_left_column():
     render_right_column()
 
     return sheet_choice, out_name, gen
-
-
-def render_right_column():
-    """오른쪽 컬럼: 안내 문구."""
-    _, col_right = st.columns([1.25, 1])
-    with col_right:
-        st.markdown("#### 안내")
-        st.markdown(
-            "- **{{A1}} / {{B7|YYYY.MM.DD}} / {{C3|#,###.00}}** 형식의 인라인 포맷 지원\n"
-            "- 생성 시 WORD와 PDF 제공, **개별 다운로드** 및 **ZIP 묶음** 제공\n"
-            "- PDF 변환은 **MS Word(docx2pdf)** 또는 **LibreOffice(soffice)** 필요"
-        )
-
-        st.markdown("#### 업로드가 안될 때")
-        st.markdown(
-            """
-            **방법 2 (Base64)**를 사용하세요:
-           
-            **Windows:**
-            ```powershell
-            [Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\\경로\\파일.xlsx"))
-            ```
-           
-            **Mac/Linux:**
-            ```bash
-            base64 /경로/파일.xlsx
-            ```
-           
-            출력된 텍스트를 복사해서 붙여넣기!
-            """
-        )
-
 
 def handle_generate(sheet_choice: Optional[str], out_name: str):
     """문서 생성 버튼 클릭 시 실행 로직."""
