@@ -15,7 +15,7 @@ from docx.text.paragraph import Paragraph
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 
-from ui_style import inject as inject_style, h4
+from ui_style import inject as inject_style, h4, small_note
 
 # docx → pdf (환경에 없으면 PDF는 ZIP에 안 넣음)
 try:
@@ -239,7 +239,6 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
         pass
     return None
 
-
 # ---------- Streamlit ----------
 
 def init_session_state():
@@ -247,9 +246,14 @@ def init_session_state():
         if key not in st.session_state:
             st.session_state[key] = None
 
-
 def render_inputs():
+    st.markdown('<div class="app-card">', unsafe_allow_html=True)
+
     h4("엑셀 파일")
+    st.markdown(
+        '<div class="section-caption">청약/납입 데이터가 들어있는 기준 엑셀 파일을 업로드하세요.</div>',
+        unsafe_allow_html=True,
+    )
     xlsx_file = st.file_uploader("엑셀 업로드", type=["xlsx", "xlsm"], key="xlsx")
     if xlsx_file is not None:
         try:
@@ -266,6 +270,10 @@ def render_inputs():
     st.markdown("---")
 
     h4("워드 템플릿(.docx)")
+    st.markdown(
+        '<div class="section-caption">납입요청서 양식이 들어있는 Word 템플릿을 업로드하세요.</div>',
+        unsafe_allow_html=True,
+    )
     docx_file = st.file_uploader("템플릿 업로드", type=["docx"], key="docx")
     if docx_file is not None:
         try:
@@ -289,15 +297,18 @@ def render_inputs():
             )
             sheets = wb.sheetnames
             index = sheets.index(TARGET_SHEET) if TARGET_SHEET in sheets else 0
+            h4("시트 선택")
             sheet_choice = st.selectbox("사용할 시트", sheets, index=index)
         except Exception as e:
             st.error(f"엑셀 시트 읽기 오류: {e}")
 
+    h4("출력 설정")
     out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
     gen = st.button("ZIP 생성", use_container_width=True, type="primary")
 
-    return sheet_choice, out_name, gen
+    st.markdown("</div>", unsafe_allow_html=True)
 
+    return sheet_choice, out_name, gen
 
 def handle_generate(sheet_choice: Optional[str], out_name: str):
     if not st.session_state.xlsx_data or not st.session_state.docx_data:
@@ -376,7 +387,13 @@ def render_zip_download(
 def main():
     inject_style()
     init_session_state()
+
     st.title("🧾 납입요청서 자동 생성 (ZIP)")
+    st.markdown(
+        '<div class="app-subtitle">엑셀 + 워드 템플릿을 합쳐 납입요청서 DOCX/PDF를 만들고 ZIP으로 내려받는 도구입니다.</div>',
+        unsafe_allow_html=True,
+    )
+
     sheet_choice, out_name, gen = render_inputs()
     if gen:
         handle_generate(sheet_choice, out_name)
