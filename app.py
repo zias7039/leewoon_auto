@@ -216,25 +216,31 @@ def load_uploaded_workbook(uploaded_file) -> Workbook:
             f"현재 업로드된 파일: {fname}"
         )
 
-    # ★ 무조건 처음으로 돌리기
     try:
-        uploaded_file.seek(0)
-    except Exception:
-        pass
-
-    try:
-        # ★ getvalue() 사용 (더 안전)
+        # ★ Streamlit UploadedFile에서 바로 바이트 읽기
+        # seek 없이 직접 getvalue() 호출
         data = uploaded_file.getvalue()
+        
+        # 디버깅: 실제 데이터 크기 확인
+        if not data or len(data) == 0:
+            raise InvalidFileException(
+                f"업로드된 파일이 비어있습니다.\n"
+                f"파일명: {fname}\n"
+                f"크기: {len(data) if data else 0} bytes\n\n"
+                f"해결 방법:\n"
+                f"1. 브라우저를 새로고침하고 다시 업로드해보세요\n"
+                f"2. 파일을 다른 위치에 복사한 후 업로드해보세요\n"
+                f"3. 엑셀에서 파일을 열어 '다른 이름으로 저장'한 후 업로드해보세요"
+            )
+        
+    except InvalidFileException:
+        raise
     except Exception as exc:
         raise InvalidFileException(
-            f"엑셀 파일을 읽는 중 문제가 발생했습니다: {exc}"
+            f"엑셀 파일을 읽는 중 문제가 발생했습니다.\n"
+            f"오류: {exc}\n"
+            f"파일명: {fname}"
         ) from exc
-
-    # ★ 0바이트 체크 추가 (디버깅용)
-    if len(data) == 0:
-        raise InvalidFileException(
-            "업로드된 파일이 비어있습니다 (0 bytes). 파일을 다시 업로드해주세요."
-        )
 
     try:
         return load_workbook(filename=io.BytesIO(data), data_only=True)
@@ -346,8 +352,6 @@ with col_left:
     sheet_choice = None
     if xlsx_file is not None:
         try:
-            # ★ 여기서도 seek(0) 명시적으로 호출
-            xlsx_file.seek(0)
             wb_tmp = load_uploaded_workbook(xlsx_file)
             default_idx = (
                 wb_tmp.sheetnames.index(TARGET_SHEET)
@@ -360,20 +364,13 @@ with col_left:
                 index=default_idx,
                 key="sheet_choice",
             )
-            # ★ 다시 처음으로 되돌리기 (중요!)
-            xlsx_file.seek(0)
         except InvalidFileException as e:
-            st.error("지원하지 않는 엑셀 형식입니다. XLSX 파일을 업로드하세요.")
-            small_note(str(e))
+            st.error("엑셀 파일을 읽을 수 없습니다")
+            st.error(str(e))
             xlsx_file = None
         except Exception as e:
-            st.warning("엑셀 미리보기 중 문제가 발생했습니다. 생성은 가능할 수 있습니다.")
+            st.warning("엑셀 미리보기 중 문제가 발생했습니다.")
             small_note(str(e))
-            # ★ 오류가 나도 seek(0) 시도
-            try:
-                xlsx_file.seek(0)
-            except:
-                pass
 
     out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
 
@@ -396,8 +393,6 @@ if gen:
     with st.status("문서 생성 중...", expanded=True) as status:
         try:
             st.write("1) 엑셀 로드")
-            # ★ 생성 직전에도 한 번 더 seek(0)
-            xlsx_file.seek(0)
             wb = load_uploaded_workbook(xlsx_file)
             ws = (
                 wb[sheet_choice]
