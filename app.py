@@ -322,27 +322,22 @@ st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
 col_left, col_right = st.columns([1.25, 1])
 
 with col_left:
-    # 업로더는 form 바깥: 업로드 즉시 rerun → 시트 목록 바로 표시
     h4("엑셀 파일")
-    st.markdown('<div class="excel-uploader">', unsafe_allow_html=True)
     xlsx_file = st.file_uploader(
         "엑셀 업로드",
         type=["xlsx", "xlsm"],
         key="xlsx_upl",
         help="엑셀 파일을 업로드하세요",
-        label_visibility="collapsed",
     )
-    st.markdown("</div>", unsafe_allow_html=True)
 
     h4("워드 템플릿(.docx)")
-    st.markdown('<div class="word-uploader">', unsafe_allow_html=True)
     docx_tpl = st.file_uploader(
         "워드 템플릿 업로드",
         type=["docx"],
         key="docx_upl",
         help="Word 템플릿 파일을 업로드하세요",
-        label_visibility="collapsed",
     )
+
     st.markdown("</div>", unsafe_allow_html=True)
 
     # 시트 선택은 업로드 직후 표시
