@@ -14,8 +14,7 @@ from docx.table import _Cell
 from docx.text.paragraph import Paragraph
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
-
-from ui_style import inject as inject_style, h4, small_note
+from ui_style import inject as inject_style, h4, section_caption, small_note
 
 # docx → pdf (환경에 없으면 PDF는 ZIP에 안 넣음)
 try:
