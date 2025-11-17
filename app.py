@@ -342,27 +342,38 @@ with col_left:
 
     # 시트 선택은 업로드 직후 표시
     sheet_choice = None
-    if xlsx_file is not None:
+    # 시트 선택은 업로드 직후 표시
+sheet_choice = None
+if xlsx_file is not None:
+    try:
+        # ★ 여기서도 seek(0) 명시적으로 호출
+        xlsx_file.seek(0)
+        wb_tmp = load_uploaded_workbook(xlsx_file)
+        default_idx = (
+            wb_tmp.sheetnames.index(TARGET_SHEET)
+            if TARGET_SHEET in wb_tmp.sheetnames
+            else 0
+        )
+        sheet_choice = st.selectbox(
+            "사용할 시트",
+            wb_tmp.sheetnames,
+            index=default_idx,
+            key="sheet_choice",
+        )
+        # ★ 다시 처음으로 되돌리기 (중요!)
+        xlsx_file.seek(0)
+    except InvalidFileException as e:
+        st.error("지원하지 않는 엑셀 형식입니다. XLSX 파일을 업로드하세요.")
+        small_note(str(e))
+        xlsx_file = None
+    except Exception as e:
+        st.warning("엑셀 미리보기 중 문제가 발생했습니다. 생성은 가능할 수 있습니다.")
+        small_note(str(e))
+        # ★ 오류가 나도 seek(0) 시도
         try:
-            wb_tmp = load_uploaded_workbook(xlsx_file)
-            default_idx = (
-                wb_tmp.sheetnames.index(TARGET_SHEET)
-                if TARGET_SHEET in wb_tmp.sheetnames
-                else 0
-            )
-            sheet_choice = st.selectbox(
-                "사용할 시트",
-                wb_tmp.sheetnames,
-                index=default_idx,
-                key="sheet_choice",
-            )
-        except InvalidFileException as e:
-            st.error("지원하지 않는 엑셀 형식입니다. XLSX 파일을 업로드하세요.")
-            small_note(str(e))
-            xlsx_file = None
-        except Exception as e:
-            st.warning("엑셀 미리보기 중 문제가 발생했습니다. 생성은 가능할 수 있습니다.")
-            small_note(str(e))
+            xlsx_file.seek(0)
+        except:
+            pass
 
     out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
 
