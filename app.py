@@ -1,6 +1,7 @@
 import io
 import os
 import re
+import base64
 import tempfile
 import subprocess
 from datetime import datetime, date
@@ -203,80 +204,27 @@ def make_replacer(ws):
     return _repl
 
 
-def load_uploaded_workbook(uploaded_file) -> Workbook:
-    """업로드된 엑셀을 로드하면서 친절한 오류 메시지 제공."""
-    if uploaded_file is None:
-        raise InvalidFileException("엑셀 파일을 업로드하세요.")
-
-    fname = (uploaded_file.name or "").strip()
-    # 확장자 체크
-    if not fname.lower().endswith((".xlsx", ".xlsm")):
+def load_workbook_from_bytes(data: bytes, filename: str = "file.xlsx") -> Workbook:
+    """바이트 데이터에서 워크북 로드."""
+    if not data or len(data) == 0:
         raise InvalidFileException(
-            f"엑셀 통합 문서(xlsx/xlsm)만 지원합니다.\n"
-            f"현재 업로드된 파일: {fname}"
+            f"파일이 비어있습니다 (0 bytes)\n"
+            f"파일명: {filename}\n\n"
+            f"해결 방법:\n"
+            f"1. 파일이 실제로 손상되었을 수 있습니다\n"
+            f"2. 엑셀에서 파일을 열어 '다른 이름으로 저장'하세요\n"
+            f"3. 파일명을 영문으로 변경해보세요 (예: data.xlsx)"
         )
-
-    try:
-        # ★ 여러 방법을 시도
-        data = None
-        
-        # 방법 1: getvalue()
-        try:
-            data = uploaded_file.getvalue()
-        except:
-            pass
-        
-        # 방법 2: read()
-        if not data or len(data) == 0:
-            try:
-                uploaded_file.seek(0)
-                data = uploaded_file.read()
-            except:
-                pass
-        
-        # 방법 3: 직접 스트림 사용
-        if not data or len(data) == 0:
-            try:
-                uploaded_file.seek(0)
-                data = uploaded_file.getbuffer().tobytes()
-            except:
-                pass
-        
-        # 디버깅: 실제 데이터 크기 확인
-        if not data or len(data) == 0:
-            raise InvalidFileException(
-                f"업로드된 파일이 비어있습니다.\n"
-                f"파일명: {fname}\n"
-                f"크기: {len(data) if data else 0} bytes\n\n"
-                f"해결 방법:\n"
-                f"1. 브라우저를 완전히 새로고침 (Ctrl+Shift+R 또는 Cmd+Shift+R)\n"
-                f"2. 시크릿/프라이빗 모드로 접속해보세요\n"
-                f"3. 파일을 다른 이름으로 저장한 후 업로드해보세요\n"
-                f"4. 다른 브라우저에서 시도해보세요"
-            )
-        
-    except InvalidFileException:
-        raise
-    except Exception as exc:
-        raise InvalidFileException(
-            f"엑셀 파일을 읽는 중 문제가 발생했습니다.\n"
-            f"오류: {exc}\n"
-            f"파일명: {fname}"
-        ) from exc
-
+    
     try:
         return load_workbook(filename=io.BytesIO(data), data_only=True)
-    except BadZipFile as exc:
+    except BadZipFile:
         raise InvalidFileException(
             "엑셀 파일이 손상되었거나 실제로는 XLS 형식일 수 있습니다.\n"
-            "엑셀에서 열어서 '다른 이름으로 저장 > Excel 통합 문서 (*.xlsx)'로 다시 저장한 뒤 업로드해 보세요."
-        ) from exc
-    except InvalidFileException as exc:
-        raise
-    except Exception as exc:
-        raise InvalidFileException(
-            f"엑셀 파일을 여는 중 오류가 발생했습니다: {exc}"
-        ) from exc
+            "엑셀에서 '다른 이름으로 저장 > Excel 통합 문서 (*.xlsx)'로 저장하세요."
+        )
+    except Exception as e:
+        raise InvalidFileException(f"엑셀 파일 로드 오류: {e}")
 
 
 def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
@@ -349,78 +297,141 @@ inject_style()
 
 st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
 
+# ★ Session State 초기화
+if 'xlsx_data' not in st.session_state:
+    st.session_state.xlsx_data = None
+if 'xlsx_name' not in st.session_state:
+    st.session_state.xlsx_name = None
+if 'docx_data' not in st.session_state:
+    st.session_state.docx_data = None
+if 'docx_name' not in st.session_state:
+    st.session_state.docx_name = None
+
 col_left, col_right = st.columns([1.25, 1])
 
 with col_left:
     h4("엑셀 파일")
-    # ★ key 변경으로 업로더 완전히 리셋
-    if 'upload_key' not in st.session_state:
-        st.session_state.upload_key = 0
     
+    # ★ 방법 1: 일반 업로드
     xlsx_file = st.file_uploader(
-        "엑셀 업로드",
+        "엑셀 업로드 (방법 1)",
         type=["xlsx", "xlsm"],
-        key=f"xlsx_upl_{st.session_state.upload_key}",
-        help="엑셀 파일을 업로드하세요",
+        key="xlsx_normal",
+        help="일반 파일 업로드",
     )
-
-    h4("워드 템플릿(.docx)")
-    docx_tpl = st.file_uploader(
-        "워드 템플릿 업로드",
-        type=["docx"],
-        key=f"docx_upl_{st.session_state.upload_key}",
-        help="Word 템플릿 파일을 업로드하세요",
-    )
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # 시트 선택은 업로드 직후 표시
-    sheet_choice = None
-    if xlsx_file is not None:
-        # ★ 파일 크기 디버깅 정보 표시
-        try:
-            file_size = len(xlsx_file.getvalue())
-            if file_size == 0:
-                st.error(f"⚠️ 파일이 비어있습니다 (0 bytes)")
-                st.info("해결 방법을 시도해보세요:")
-                st.markdown("""
-                1. **브라우저 새로고침** (Ctrl+Shift+R 또는 Cmd+Shift+R)
-                2. **시크릿/프라이빗 창**에서 다시 접속
-                3. **파일 이름을 영문으로 변경** (예: data.xlsx)
-                4. **엑셀에서 다시 저장** 후 업로드
-                5. **다른 브라우저** 시도 (Chrome, Edge, Firefox)
-                """)
-                xlsx_file = None
-            else:
-                small_note(f"파일 크기: {file_size:,} bytes")
-        except Exception as e:
-            st.warning(f"파일 정보 확인 중 오류: {e}")
+    
+    # ★ 방법 2: Base64 텍스트 입력
+    with st.expander("📋 또는 Base64로 붙여넣기 (방법 2)", expanded=False):
+        st.markdown("""
+        **파일 업로드가 안될 때 사용하세요:**
+        1. 터미널/명령 프롬프트에서 실행:
+        ```bash
+        # Windows (PowerShell)
+        [Convert]::ToBase64String([IO.File]::ReadAllBytes("파일경로.xlsx"))
         
-        if xlsx_file is not None:
+        # Mac/Linux
+        base64 파일경로.xlsx
+        ```
+        2. 출력된 텍스트를 복사해서 아래 박스에 붙여넣기
+        """)
+        xlsx_base64 = st.text_area(
+            "Base64 텍스트",
+            height=100,
+            placeholder="여기에 Base64 인코딩된 엑셀 파일을 붙여넣으세요...",
+            key="xlsx_base64"
+        )
+        xlsx_fname = st.text_input("파일명", value="data.xlsx", key="xlsx_fname")
+        
+        if st.button("Base64에서 로드", key="load_xlsx_base64"):
             try:
-                wb_tmp = load_uploaded_workbook(xlsx_file)
-                default_idx = (
-                    wb_tmp.sheetnames.index(TARGET_SHEET)
-                    if TARGET_SHEET in wb_tmp.sheetnames
-                    else 0
-                )
-                sheet_choice = st.selectbox(
-                    "사용할 시트",
-                    wb_tmp.sheetnames,
-                    index=default_idx,
-                    key="sheet_choice",
-                )
-            except InvalidFileException as e:
-                st.error("엑셀 파일을 읽을 수 없습니다")
-                st.error(str(e))
-                xlsx_file = None
+                xlsx_bytes = base64.b64decode(xlsx_base64.strip())
+                st.session_state.xlsx_data = xlsx_bytes
+                st.session_state.xlsx_name = xlsx_fname
+                st.success(f"✅ 엑셀 파일 로드 완료: {len(xlsx_bytes):,} bytes")
             except Exception as e:
-                st.warning("엑셀 미리보기 중 문제가 발생했습니다.")
-                small_note(str(e))
+                st.error(f"Base64 디코딩 실패: {e}")
+
+    # 일반 업로드 처리
+    if xlsx_file is not None:
+        try:
+            xlsx_bytes = xlsx_file.getvalue()
+            if len(xlsx_bytes) > 0:
+                st.session_state.xlsx_data = xlsx_bytes
+                st.session_state.xlsx_name = xlsx_file.name
+                st.success(f"✅ {xlsx_file.name}: {len(xlsx_bytes):,} bytes")
+            else:
+                st.error("⚠️ 업로드된 파일이 0 bytes입니다. 방법 2를 사용해보세요.")
+        except Exception as e:
+            st.error(f"파일 읽기 오류: {e}")
+
+    st.markdown("---")
+    
+    h4("워드 템플릿(.docx)")
+    
+    # ★ 방법 1: 일반 업로드
+    docx_tpl = st.file_uploader(
+        "템플릿 업로드 (방법 1)",
+        type=["docx"],
+        key="docx_normal",
+        help="Word 템플릿 파일",
+    )
+    
+    # ★ 방법 2: Base64 텍스트 입력
+    with st.expander("📋 또는 Base64로 붙여넣기 (방법 2)", expanded=False):
+        docx_base64 = st.text_area(
+            "Base64 텍스트",
+            height=100,
+            placeholder="Base64 인코딩된 워드 파일...",
+            key="docx_base64"
+        )
+        docx_fname = st.text_input("파일명", value="template.docx", key="docx_fname")
+        
+        if st.button("Base64에서 로드", key="load_docx_base64"):
+            try:
+                docx_bytes = base64.b64decode(docx_base64.strip())
+                st.session_state.docx_data = docx_bytes
+                st.session_state.docx_name = docx_fname
+                st.success(f"✅ 워드 템플릿 로드 완료: {len(docx_bytes):,} bytes")
+            except Exception as e:
+                st.error(f"Base64 디코딩 실패: {e}")
+    
+    # 일반 업로드 처리
+    if docx_tpl is not None:
+        try:
+            docx_bytes = docx_tpl.getvalue()
+            if len(docx_bytes) > 0:
+                st.session_state.docx_data = docx_bytes
+                st.session_state.docx_name = docx_tpl.name
+                st.success(f"✅ {docx_tpl.name}: {len(docx_bytes):,} bytes")
+            else:
+                st.error("⚠️ 업로드된 파일이 0 bytes입니다. 방법 2를 사용해보세요.")
+        except Exception as e:
+            st.error(f"파일 읽기 오류: {e}")
+
+    st.markdown("---")
+    
+    # 시트 선택
+    sheet_choice = None
+    if st.session_state.xlsx_data:
+        try:
+            wb_tmp = load_workbook_from_bytes(st.session_state.xlsx_data, st.session_state.xlsx_name)
+            default_idx = (
+                wb_tmp.sheetnames.index(TARGET_SHEET)
+                if TARGET_SHEET in wb_tmp.sheetnames
+                else 0
+            )
+            sheet_choice = st.selectbox(
+                "사용할 시트",
+                wb_tmp.sheetnames,
+                index=default_idx,
+                key="sheet_choice",
+            )
+        except Exception as e:
+            st.error(f"엑셀 미리보기 오류: {e}")
 
     out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
 
-    gen = st.button("문서 생성", use_container_width=True)
+    gen = st.button("문서 생성", use_container_width=True, type="primary")
 
 with col_right:
     st.markdown("#### 안내")
@@ -429,17 +440,34 @@ with col_right:
         "- 생성 시 WORD와 PDF 제공, **개별 다운로드** 및 **ZIP 묶음** 제공\n"
         "- PDF 변환은 **MS Word(docx2pdf)** 또는 **LibreOffice(soffice)** 필요"
     )
+    
+    st.markdown("#### 업로드가 안될 때")
+    st.markdown("""
+    **방법 2 (Base64)**를 사용하세요:
+    
+    **Windows:**
+    ```powershell
+    [Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\\경로\\파일.xlsx"))
+    ```
+    
+    **Mac/Linux:**
+    ```bash
+    base64 /경로/파일.xlsx
+    ```
+    
+    출력된 텍스트를 복사해서 붙여넣기!
+    """)
 
 # ================== 생성 실행 ==================
 if gen:
-    if not xlsx_file or not docx_tpl:
-        st.error("엑셀과 템플릿을 모두 업로드하세요.")
+    if not st.session_state.xlsx_data or not st.session_state.docx_data:
+        st.error("엑셀과 템플릿을 모두 로드하세요.")
         st.stop()
 
     with st.status("문서 생성 중...", expanded=True) as status:
         try:
             st.write("1) 엑셀 로드")
-            wb = load_uploaded_workbook(xlsx_file)
+            wb = load_workbook_from_bytes(st.session_state.xlsx_data, st.session_state.xlsx_name)
             ws = (
                 wb[sheet_choice]
                 if sheet_choice
@@ -451,8 +479,7 @@ if gen:
             )
 
             st.write("2) 템플릿 로드")
-            tpl_bytes = docx_tpl.getvalue()
-            doc = Document(io.BytesIO(tpl_bytes))
+            doc = Document(io.BytesIO(st.session_state.docx_data))
 
             st.write("3) 치환 실행")
             replacer = make_replacer(ws)
