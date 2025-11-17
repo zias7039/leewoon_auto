@@ -1,22 +1,21 @@
+import base64
 import io
 import os
 import re
-import base64
-import tempfile
 import subprocess
-from datetime import datetime, date
+import tempfile
+from datetime import date, datetime
 from decimal import Decimal
-from zipfile import ZipFile, ZIP_DEFLATED, BadZipFile
 from typing import Optional, Set
+from zipfile import BadZipFile, ZipFile, ZIP_DEFLATED
 
 import streamlit as st
-from openpyxl import load_workbook, Workbook
-from openpyxl.utils.exceptions import InvalidFileException
 from docx import Document
 from docx.table import _Cell
 from docx.text.paragraph import Paragraph
+from openpyxl import Workbook, load_workbook
+from openpyxl.utils.exceptions import InvalidFileException
 
-# 스타일
 from ui_style import inject as inject_style, h4, small_note
 
 # 선택: docx2pdf
@@ -25,20 +24,25 @@ try:
 except Exception:
     docx2pdf_convert = None
 
-# -------- 치환 유틸 --------
+# ================== 상수 & 정규식 ================== #
+
 TOKEN_RE = re.compile(r"\{\{([A-Z]+[0-9]+)(?:\|([^}]+))?\}\}")
 LEFTOVER_RE = re.compile(r"\{\{[^}]+\}\}")
-DEFAULT_OUT = f"{datetime.today():%Y%m%d}_#_납입요청서_DB저축은행.docx"
-TARGET_SHEET = "2.  배정후 청약시"
 
+DEFAULT_OUT = f"{datetime.today():%Y%m%d}_#_납입요청서_DB저축은행.docx"
+TARGET_SHEET = "2. 배정후 청약시"
+
+
+# ================== 파일명 유틸 ================== #
 
 def ensure_docx(name: str) -> str:
+    """파일명에 .docx 확장자를 보장."""
     name = (name or "").strip()
     return name if name.lower().endswith(".docx") else (name + ".docx")
 
 
 def ensure_pdf(name: str) -> str:
-    """출력 파일명을 PDF 확장자로 정리."""
+    """파일명에 .pdf 확장자를 보장."""
     base = (name or "output").strip()
     return base if base.lower().endswith(".pdf") else (base + ".pdf")
 
@@ -57,13 +61,16 @@ def has_soffice() -> bool:
         return False
 
 
+# ================== 값 포맷팅 유틸 ================== #
+
 def try_format_as_date(v) -> str:
+    """value를 'YYYY. M. D.' 형식의 문자열로 포맷 (가능한 경우만)."""
     try:
         if isinstance(v, (datetime, date)):
             return f"{v.year}. {v.month}. {v.day}."
         if isinstance(v, str):
             s = v.strip()
-            # 2024-01-01 같은 형식만 간단히 처리
+            # 2024-01-01 형식만 간단 처리
             if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
                 dt = datetime.strptime(s, "%Y-%m-%d").date()
                 return f"{dt.year}. {dt.month}. {dt.day}."
@@ -73,6 +80,7 @@ def try_format_as_date(v) -> str:
 
 
 def fmt_number(v) -> str:
+    """숫자형 값을 천단위 콤마 문자열로 포맷."""
     try:
         if isinstance(v, (int, float, Decimal)):
             return f"{float(v):,.0f}"
@@ -86,6 +94,7 @@ def fmt_number(v) -> str:
 
 
 def value_to_text(v) -> str:
+    """셀 값을 날짜/숫자 우선 포맷 후 문자열로 변환."""
     s = try_format_as_date(v)
     if s:
         return s
@@ -96,10 +105,15 @@ def value_to_text(v) -> str:
 
 
 def apply_inline_format(value, fmt: Optional[str]) -> str:
+    """
+    {{A1|FORMAT}} 에서 FORMAT에 따라 value 포맷팅.
+    - 날짜 포맷: YYYY/MM/DD 등
+    - 숫자 포맷: #,###.00 등
+    """
     if fmt is None or fmt.strip() == "":
         return value_to_text(value)
 
-    # 날짜 포맷 (YYYY/MM/DD 등)
+    # 날짜 포맷 처리
     if any(tok in fmt for tok in ("YYYY", "MM", "DD")):
         if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip()):
             value = datetime.strptime(value.strip(), "%Y-%m-%d").date()
@@ -112,7 +126,7 @@ def apply_inline_format(value, fmt: Optional[str]) -> str:
             return value.strftime(f)
         return value_to_text(value)
 
-    # 숫자 포맷 (#,###.00 같은 형태)
+    # 숫자 포맷 처리 (#,###.00 등)
     if re.fullmatch(r"[#,0]+(?:\.[0#]+)?", fmt.replace(",", "")):
         try:
             num = float(str(value).replace(",", ""))
@@ -124,14 +138,18 @@ def apply_inline_format(value, fmt: Optional[str]) -> str:
     return value_to_text(value)
 
 
+# ================== DOCX 치환 유틸 ================== #
+
 def replace_in_paragraph(paragraph: Paragraph, repl_func):
-    """문단에 포함된 {{A1}} 토큰 치환."""
+    """문단 텍스트의 {{A1}} 토큰 치환."""
     if not paragraph.text:
         return
+
     new_text = repl_func(paragraph.text)
     if new_text == paragraph.text:
         return
-    # 단순하게 run 구조는 무시하고 전체 텍스트 교체
+
+    # run 구조는 무시하고 전체 텍스트 교체
     for run in paragraph.runs:
         run.text = ""
     if paragraph.runs:
@@ -141,7 +159,7 @@ def replace_in_paragraph(paragraph: Paragraph, repl_func):
 
 
 def replace_in_table(cell: _Cell, repl_func):
-    """테이블 셀 내부 문단 치환."""
+    """테이블 셀 내부 문단/중첩 테이블 치환."""
     for p in cell.paragraphs:
         replace_in_paragraph(p, repl_func)
     for t in cell.tables:
@@ -178,6 +196,8 @@ def replace_everywhere(doc: Document, repl_func):
 
 
 def make_replacer(ws):
+    """엑셀 워크시트 기반 치환 함수 생성."""
+
     def _repl(text: str) -> str:
         def sub(m):
             addr, fmt = m.group(1), m.group(2)
@@ -189,20 +209,40 @@ def make_replacer(ws):
 
         replaced = TOKEN_RE.sub(sub, text)
 
-        # 간이 날짜 더미 치환
-        sp = "    "
+        # 간이 날짜 더미 치환 (YYYY년 MM월 DD일 → 오늘 날짜)
         today = datetime.today()
-        today_str = f"{today.year}년{sp}{today.month}월{sp}{today.day}일"
+        today_str = f"{today.year}년 {today.month}월 {today.day}일"
         for token in [
             "YYYY년 MM월 DD일",
-            "YYYY년    MM월    DD일",
             "YYYY 년 MM 월 DD 일",
         ]:
             replaced = replaced.replace(token, today_str)
+
         return replaced
 
     return _repl
 
+
+def collect_leftover_tokens(doc: Document) -> Set[str]:
+    """치환 후에도 남아 있는 {{...}} 토큰 수집."""
+    leftovers: Set[str] = set()
+
+    def _scan(parent):
+        for item in iter_block_items(parent):
+            if isinstance(item, Paragraph) and item.text:
+                for m in LEFTOVER_RE.findall(item.text):
+                    leftovers.add(m)
+
+    _scan(doc)
+
+    for section in doc.sections:
+        for container in (section.header, section.footer):
+            _scan(container)
+
+    return leftovers
+
+
+# ================== 엑셀/워드 로드 & 변환 ================== #
 
 def load_workbook_from_bytes(data: bytes, filename: str = "file.xlsx") -> Workbook:
     """바이트 데이터에서 워크북 로드."""
@@ -215,7 +255,7 @@ def load_workbook_from_bytes(data: bytes, filename: str = "file.xlsx") -> Workbo
             f"2. 엑셀에서 파일을 열어 '다른 이름으로 저장'하세요\n"
             f"3. 파일명을 영문으로 변경해보세요 (예: data.xlsx)"
         )
-    
+
     try:
         return load_workbook(filename=io.BytesIO(data), data_only=True)
     except BadZipFile:
@@ -271,195 +311,194 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
                     pass
     except Exception:
         pass
+
     return None
 
 
-def collect_leftover_tokens(doc: Document) -> Set[str]:
-    """치환 후에도 남아 있는 {{...}} 토큰 수집."""
-    leftovers: Set[str] = set()
+# ================== Streamlit UI ================== #
 
-    def _scan(parent):
-        for item in iter_block_items(parent):
-            if isinstance(item, Paragraph) and item.text:
-                for m in LEFTOVER_RE.findall(item.text):
-                    leftovers.add(m)
-
-    _scan(doc)
-    for section in doc.sections:
-        for container in (section.header, section.footer):
-            _scan(container)
-
-    return leftovers
+def init_session_state():
+    """세션 상태 초기화."""
+    if "xlsx_data" not in st.session_state:
+        st.session_state.xlsx_data = None
+    if "xlsx_name" not in st.session_state:
+        st.session_state.xlsx_name = None
+    if "docx_data" not in st.session_state:
+        st.session_state.docx_data = None
+    if "docx_name" not in st.session_state:
+        st.session_state.docx_name = None
 
 
-# ================== UI ==================
-inject_style()
+def render_left_column():
+    """왼쪽 컬럼: 파일 업로드 / 시트 선택 / 실행 버튼."""
+    col_left, col_right = st.columns([1.25, 1])
 
-st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
+    with col_left:
+        # ===== 엑셀 업로드 =====
+        h4("엑셀 파일")
 
-# ★ Session State 초기화
-if 'xlsx_data' not in st.session_state:
-    st.session_state.xlsx_data = None
-if 'xlsx_name' not in st.session_state:
-    st.session_state.xlsx_name = None
-if 'docx_data' not in st.session_state:
-    st.session_state.docx_data = None
-if 'docx_name' not in st.session_state:
-    st.session_state.docx_name = None
-
-col_left, col_right = st.columns([1.25, 1])
-
-with col_left:
-    h4("엑셀 파일")
-    
-    # ★ 방법 1: 일반 업로드
-    xlsx_file = st.file_uploader(
-        "엑셀 업로드 (방법 1)",
-        type=["xlsx", "xlsm"],
-        key="xlsx_normal",
-        help="일반 파일 업로드",
-    )
-    
-    # ★ 방법 2: Base64 텍스트 입력
-    with st.expander("📋 또는 Base64로 붙여넣기 (방법 2)", expanded=False):
-        st.markdown("""
-        **파일 업로드가 안될 때 사용하세요:**
-        1. 터미널/명령 프롬프트에서 실행:
-        ```bash
-        # Windows (PowerShell)
-        [Convert]::ToBase64String([IO.File]::ReadAllBytes("파일경로.xlsx"))
-        
-        # Mac/Linux
-        base64 파일경로.xlsx
-        ```
-        2. 출력된 텍스트를 복사해서 아래 박스에 붙여넣기
-        """)
-        xlsx_base64 = st.text_area(
-            "Base64 텍스트",
-            height=100,
-            placeholder="여기에 Base64 인코딩된 엑셀 파일을 붙여넣으세요...",
-            key="xlsx_base64"
+        xlsx_file = st.file_uploader(
+            "엑셀 업로드 (방법 1)",
+            type=["xlsx", "xlsm"],
+            key="xlsx_normal",
+            help="일반 파일 업로드",
         )
-        xlsx_fname = st.text_input("파일명", value="data.xlsx", key="xlsx_fname")
-        
-        if st.button("Base64에서 로드", key="load_xlsx_base64"):
+
+        # Base64 업로드
+        with st.expander("📋 또는 Base64로 붙여넣기 (방법 2)", expanded=False):
+            st.markdown(
+                """
+                **파일 업로드가 안될 때 사용하세요:**
+                1. 터미널/명령 프롬프트에서 실행:
+                ```bash
+                # Windows (PowerShell)
+                [Convert]::ToBase64String([IO.File]::ReadAllBytes("파일경로.xlsx"))
+               
+                # Mac/Linux
+                base64 파일경로.xlsx
+                ```
+                2. 출력된 텍스트를 복사해서 아래 박스에 붙여넣기
+                """
+            )
+            xlsx_base64 = st.text_area(
+                "Base64 텍스트",
+                height=100,
+                placeholder="여기에 Base64 인코딩된 엑셀 파일을 붙여넣으세요...",
+                key="xlsx_base64",
+            )
+            xlsx_fname = st.text_input("파일명", value="data.xlsx", key="xlsx_fname")
+
+            if st.button("Base64에서 로드", key="load_xlsx_base64"):
+                try:
+                    xlsx_bytes = base64.b64decode(xlsx_base64.strip())
+                    st.session_state.xlsx_data = xlsx_bytes
+                    st.session_state.xlsx_name = xlsx_fname
+                    st.success(f"✅ 엑셀 파일 로드 완료: {len(xlsx_bytes):,} bytes")
+                except Exception as e:
+                    st.error(f"Base64 디코딩 실패: {e}")
+
+        # 일반 업로드 처리
+        if xlsx_file is not None:
             try:
-                xlsx_bytes = base64.b64decode(xlsx_base64.strip())
-                st.session_state.xlsx_data = xlsx_bytes
-                st.session_state.xlsx_name = xlsx_fname
-                st.success(f"✅ 엑셀 파일 로드 완료: {len(xlsx_bytes):,} bytes")
+                xlsx_bytes = xlsx_file.getvalue()
+                if len(xlsx_bytes) > 0:
+                    st.session_state.xlsx_data = xlsx_bytes
+                    st.session_state.xlsx_name = xlsx_file.name
+                    st.success(f"✅ {xlsx_file.name}: {len(xlsx_bytes):,} bytes")
+                else:
+                    st.error("⚠️ 업로드된 파일이 0 bytes입니다. 방법 2를 사용해보세요.")
             except Exception as e:
-                st.error(f"Base64 디코딩 실패: {e}")
+                st.error(f"파일 읽기 오류: {e}")
 
-    # 일반 업로드 처리
-    if xlsx_file is not None:
-        try:
-            xlsx_bytes = xlsx_file.getvalue()
-            if len(xlsx_bytes) > 0:
-                st.session_state.xlsx_data = xlsx_bytes
-                st.session_state.xlsx_name = xlsx_file.name
-                st.success(f"✅ {xlsx_file.name}: {len(xlsx_bytes):,} bytes")
-            else:
-                st.error("⚠️ 업로드된 파일이 0 bytes입니다. 방법 2를 사용해보세요.")
-        except Exception as e:
-            st.error(f"파일 읽기 오류: {e}")
+        st.markdown("---")
 
-    st.markdown("---")
-    
-    h4("워드 템플릿(.docx)")
-    
-    # ★ 방법 1: 일반 업로드
-    docx_tpl = st.file_uploader(
-        "템플릿 업로드 (방법 1)",
-        type=["docx"],
-        key="docx_normal",
-        help="Word 템플릿 파일",
-    )
-    
-    # ★ 방법 2: Base64 텍스트 입력
-    with st.expander("📋 또는 Base64로 붙여넣기 (방법 2)", expanded=False):
-        docx_base64 = st.text_area(
-            "Base64 텍스트",
-            height=100,
-            placeholder="Base64 인코딩된 워드 파일...",
-            key="docx_base64"
+        # ===== 워드 템플릿 업로드 =====
+        h4("워드 템플릿(.docx)")
+
+        docx_tpl = st.file_uploader(
+            "템플릿 업로드 (방법 1)",
+            type=["docx"],
+            key="docx_normal",
+            help="Word 템플릿 파일",
         )
-        docx_fname = st.text_input("파일명", value="template.docx", key="docx_fname")
-        
-        if st.button("Base64에서 로드", key="load_docx_base64"):
+
+        with st.expander("📋 또는 Base64로 붙여넣기 (방법 2)", expanded=False):
+            docx_base64 = st.text_area(
+                "Base64 텍스트",
+                height=100,
+                placeholder="Base64 인코딩된 워드 파일...",
+                key="docx_base64",
+            )
+            docx_fname = st.text_input(
+                "파일명", value="template.docx", key="docx_fname"
+            )
+
+            if st.button("Base64에서 로드", key="load_docx_base64"):
+                try:
+                    docx_bytes = base64.b64decode(docx_base64.strip())
+                    st.session_state.docx_data = docx_bytes
+                    st.session_state.docx_name = docx_fname
+                    st.success(f"✅ 워드 템플릿 로드 완료: {len(docx_bytes):,} bytes")
+                except Exception as e:
+                    st.error(f"Base64 디코딩 실패: {e}")
+
+        if docx_tpl is not None:
             try:
-                docx_bytes = base64.b64decode(docx_base64.strip())
-                st.session_state.docx_data = docx_bytes
-                st.session_state.docx_name = docx_fname
-                st.success(f"✅ 워드 템플릿 로드 완료: {len(docx_bytes):,} bytes")
+                docx_bytes = docx_tpl.getvalue()
+                if len(docx_bytes) > 0:
+                    st.session_state.docx_data = docx_bytes
+                    st.session_state.docx_name = docx_tpl.name
+                    st.success(f"✅ {docx_tpl.name}: {len(docx_bytes):,} bytes")
+                else:
+                    st.error("⚠️ 업로드된 파일이 0 bytes입니다. 방법 2를 사용해보세요.")
             except Exception as e:
-                st.error(f"Base64 디코딩 실패: {e}")
-    
-    # 일반 업로드 처리
-    if docx_tpl is not None:
-        try:
-            docx_bytes = docx_tpl.getvalue()
-            if len(docx_bytes) > 0:
-                st.session_state.docx_data = docx_bytes
-                st.session_state.docx_name = docx_tpl.name
-                st.success(f"✅ {docx_tpl.name}: {len(docx_bytes):,} bytes")
-            else:
-                st.error("⚠️ 업로드된 파일이 0 bytes입니다. 방법 2를 사용해보세요.")
-        except Exception as e:
-            st.error(f"파일 읽기 오류: {e}")
+                st.error(f"파일 읽기 오류: {e}")
 
-    st.markdown("---")
-    
-    # 시트 선택
-    sheet_choice = None
-    if st.session_state.xlsx_data:
-        try:
-            wb_tmp = load_workbook_from_bytes(st.session_state.xlsx_data, st.session_state.xlsx_name)
-            default_idx = (
-                wb_tmp.sheetnames.index(TARGET_SHEET)
-                if TARGET_SHEET in wb_tmp.sheetnames
-                else 0
-            )
-            sheet_choice = st.selectbox(
-                "사용할 시트",
-                wb_tmp.sheetnames,
-                index=default_idx,
-                key="sheet_choice",
-            )
-        except Exception as e:
-            st.error(f"엑셀 미리보기 오류: {e}")
+        st.markdown("---")
 
-    out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
+        # ===== 시트 선택 =====
+        sheet_choice = None
+        if st.session_state.xlsx_data:
+            try:
+                wb_tmp = load_workbook_from_bytes(
+                    st.session_state.xlsx_data, st.session_state.xlsx_name
+                )
+                default_idx = (
+                    wb_tmp.sheetnames.index(TARGET_SHEET)
+                    if TARGET_SHEET in wb_tmp.sheetnames
+                    else 0
+                )
+                sheet_choice = st.selectbox(
+                    "사용할 시트",
+                    wb_tmp.sheetnames,
+                    index=default_idx,
+                    key="sheet_choice",
+                )
+            except Exception as e:
+                st.error(f"엑셀 미리보기 오류: {e}")
 
-    gen = st.button("문서 생성", use_container_width=True, type="primary")
+        out_name = st.text_input("출력 파일명", value=DEFAULT_OUT)
+        gen = st.button("문서 생성", use_container_width=True, type="primary")
 
-with col_right:
-    st.markdown("#### 안내")
-    st.markdown(
-        "- **{{A1}} / {{B7|YYYY.MM.DD}} / {{C3|#,###.00}}** 형식의 인라인 포맷 지원\n"
-        "- 생성 시 WORD와 PDF 제공, **개별 다운로드** 및 **ZIP 묶음** 제공\n"
-        "- PDF 변환은 **MS Word(docx2pdf)** 또는 **LibreOffice(soffice)** 필요"
-    )
-    
-    st.markdown("#### 업로드가 안될 때")
-    st.markdown("""
-    **방법 2 (Base64)**를 사용하세요:
-    
-    **Windows:**
-    ```powershell
-    [Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\\경로\\파일.xlsx"))
-    ```
-    
-    **Mac/Linux:**
-    ```bash
-    base64 /경로/파일.xlsx
-    ```
-    
-    출력된 텍스트를 복사해서 붙여넣기!
-    """)
+    # 오른쪽 컬럼은 따로 렌더링
+    render_right_column()
 
-# ================== 생성 실행 ==================
-if gen:
+    return sheet_choice, out_name, gen
+
+
+def render_right_column():
+    """오른쪽 컬럼: 안내 문구."""
+    _, col_right = st.columns([1.25, 1])
+    with col_right:
+        st.markdown("#### 안내")
+        st.markdown(
+            "- **{{A1}} / {{B7|YYYY.MM.DD}} / {{C3|#,###.00}}** 형식의 인라인 포맷 지원\n"
+            "- 생성 시 WORD와 PDF 제공, **개별 다운로드** 및 **ZIP 묶음** 제공\n"
+            "- PDF 변환은 **MS Word(docx2pdf)** 또는 **LibreOffice(soffice)** 필요"
+        )
+
+        st.markdown("#### 업로드가 안될 때")
+        st.markdown(
+            """
+            **방법 2 (Base64)**를 사용하세요:
+           
+            **Windows:**
+            ```powershell
+            [Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\\경로\\파일.xlsx"))
+            ```
+           
+            **Mac/Linux:**
+            ```bash
+            base64 /경로/파일.xlsx
+            ```
+           
+            출력된 텍스트를 복사해서 붙여넣기!
+            """
+        )
+
+
+def handle_generate(sheet_choice: Optional[str], out_name: str):
+    """문서 생성 버튼 클릭 시 실행 로직."""
     if not st.session_state.xlsx_data or not st.session_state.docx_data:
         st.error("엑셀과 템플릿을 모두 로드하세요.")
         st.stop()
@@ -467,7 +506,9 @@ if gen:
     with st.status("문서 생성 중...", expanded=True) as status:
         try:
             st.write("1) 엑셀 로드")
-            wb = load_workbook_from_bytes(st.session_state.xlsx_data, st.session_state.xlsx_name)
+            wb = load_workbook_from_bytes(
+                st.session_state.xlsx_data, st.session_state.xlsx_name
+            )
             ws = (
                 wb[sheet_choice]
                 if sheet_choice
@@ -505,6 +546,7 @@ if gen:
                 small_note("모든 토큰이 정상적으로 치환되었습니다.")
 
             status.update(label="완료", state="complete", expanded=False)
+
         except InvalidFileException as e:
             status.update(label="엑셀 형식 오류", state="error", expanded=True)
             st.error(str(e))
@@ -515,8 +557,15 @@ if gen:
             st.stop()
 
     st.success("문서가 준비되었습니다.")
+    render_download_buttons(docx_bytes, pdf_bytes, pdf_ok, out_name)
 
+
+def render_download_buttons(docx_bytes: bytes, pdf_bytes: Optional[bytes],
+                            pdf_ok: bool, out_name: str):
+    """WORD / PDF / ZIP 다운로드 버튼 렌더링."""
     dl_cols = st.columns(3)
+
+    # WORD
     with dl_cols[0]:
         st.download_button(
             "📄 WORD 다운로드",
@@ -525,6 +574,8 @@ if gen:
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             use_container_width=True,
         )
+
+    # PDF
     with dl_cols[1]:
         st.download_button(
             "🖨 PDF 다운로드",
@@ -537,6 +588,8 @@ if gen:
             else "PDF 변환 엔진(Word 또는 LibreOffice)이 없는 환경입니다.",
             use_container_width=True,
         )
+
+    # ZIP (WORD + PDF)
     with dl_cols[2]:
         zip_buf = io.BytesIO()
         with ZipFile(zip_buf, "w", ZIP_DEFLATED) as zf:
@@ -546,8 +599,9 @@ if gen:
                 docx_bytes,
             )
             # PDF (가능한 경우에만)
-            if pdf_ok:
+            if pdf_ok and pdf_bytes:
                 zf.writestr(ensure_pdf(out_name), pdf_bytes)
+
         zip_buf.seek(0)
         st.download_button(
             "📦 ZIP (WORD+PDF)",
@@ -555,3 +609,21 @@ if gen:
             file_name=ensure_pdf(out_name).replace(".pdf", "") + "_both.zip",
             use_container_width=True,
         )
+
+
+# ================== 엔트리 포인트 ================== #
+
+def main():
+    inject_style()
+    init_session_state()
+
+    st.title("🧾 납입요청서 자동 생성 (DOCX + PDF)")
+
+    sheet_choice, out_name, gen = render_left_column()
+
+    if gen:
+        handle_generate(sheet_choice, out_name)
+
+
+if __name__ == "__main__":
+    main()
