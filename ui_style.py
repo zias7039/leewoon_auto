@@ -17,10 +17,11 @@ footer {visibility: hidden;}
 h1 {
     margin-bottom: 0.2rem;
 }
+
 .app-subtitle {
     font-size: 0.9rem;
     color: rgba(100, 116, 139, 0.95);
-    margin-bottom: 1.2rem;
+    margin-bottom: 1.5rem;   /* 줄바꿈 대신 margin으로 해결 */
 }
 
 /* 카드 레이아웃 */
