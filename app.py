@@ -402,6 +402,64 @@ def render_left_column():
 
     return sheet_choice, out_name, gen
 
+def handle_generate(sheet_choice: Optional[str], out_name: str):
+    """문서 생성 버튼 클릭 시 실행 로직 (실행 단계 UI 없이)."""
+    if not st.session_state.xlsx_data or not st.session_state.docx_data:
+        st.error("엑셀과 템플릿을 모두 로드하세요.")
+        return
+
+    try:
+        # 1) 엑셀 로드
+        wb = load_workbook_from_bytes(
+            st.session_state.xlsx_data, st.session_state.xlsx_name
+        )
+        ws = (
+            wb[sheet_choice]
+            if sheet_choice
+            else (
+                wb[TARGET_SHEET]
+                if TARGET_SHEET in wb.sheetnames
+                else wb[wb.sheetnames[0]]
+            )
+        )
+
+        # 2) 템플릿 로드
+        doc = Document(io.BytesIO(st.session_state.docx_data))
+
+        # 3) 치환 실행
+        replacer = make_replacer(ws)
+        replace_everywhere(doc, replacer)
+
+        # 4) WORD 저장
+        docx_buf = io.BytesIO()
+        doc.save(docx_buf)
+        docx_buf.seek(0)
+        docx_bytes = docx_buf.getvalue()
+
+        # 5) PDF 변환 시도
+        pdf_bytes = convert_docx_to_pdf_bytes(docx_bytes)
+        pdf_ok = pdf_bytes is not None
+
+        # 6) 남은 토큰 확인
+        doc_after = Document(io.BytesIO(docx_bytes))
+        leftovers = sorted(list(collect_leftover_tokens(doc_after)))
+        if leftovers:
+            with st.expander("남아 있는 토큰 목록"):
+                st.code("\n".join(leftovers))
+        else:
+            small_note("모든 토큰이 정상적으로 치환되었습니다.")
+
+    except InvalidFileException as e:
+        st.error(str(e))
+        return
+    except Exception as e:
+        st.exception(e)
+        return
+
+    st.success("문서가 준비되었습니다.")
+    render_download_buttons(docx_bytes, pdf_bytes, pdf_ok, out_name)
+
+
 def render_download_buttons(
     docx_bytes: bytes,
     pdf_bytes: Optional[bytes],
