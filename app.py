@@ -195,10 +195,14 @@ def load_workbook_from_bytes(data: bytes, filename: str = "file.xlsx") -> Workbo
         raise InvalidFileException(f"엑셀 파일 로드 오류: {e}")
 
 
+import platform
+
 def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
-    """DOCX 바이트를 PDF 바이트로 변환.
-    - 1순위: MS Word(docx2pdf) 사용 (Windows/Mac에서 Word가 있을 때)
-    - 2순위: LibreOffice(soffice) 사용 (리눅스/서버 환경)
+    """
+    DOCX → PDF 변환.
+    - 1순위: Windows + MS Word(docx2pdf) 엔진
+    - 2순위: 그 외 환경은 LibreOffice(soffice) 엔진
+    폰트(한컴바탕) 유지가 가장 중요한 경우 → Windows + Word에서 돌릴수록 정확도가 올라간다.
     """
     try:
         with tempfile.TemporaryDirectory() as td:
@@ -208,23 +212,23 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
             with open(in_path, "wb") as f:
                 f.write(docx_bytes)
 
-            # 1) MS Word(docx2pdf) 우선 시도
-            if docx2pdf_convert is not None:
+            system = platform.system().lower()
+
+            # 1) Windows + docx2pdf 우선
+            if system == "windows" and docx2pdf_convert is not None:
                 try:
-                    # 여기서 Word를 쓰는지, LibreOffice를 쓰는지는
-                    # docx2pdf 설치 환경에 따라 다름.
-                    st.info("PDF 변환: docx2pdf 엔진 사용 시도 (MS Word 우선).")
+                    st.info("PDF 변환: MS Word(docx2pdf) 엔진 사용 시도 중...")
                     docx2pdf_convert(in_path, out_path)
                     if os.path.exists(out_path):
                         with open(out_path, "rb") as f:
                             return f.read()
                 except Exception as e:
-                    st.warning(f"docx2pdf 변환 실패, LibreOffice로 재시도합니다. ({e})")
+                    st.warning(f"MS Word(docx2pdf) 변환 실패, LibreOffice로 재시도합니다. ({e})")
 
-            # 2) LibreOffice(soffice) 직접 호출
+            # 2) LibreOffice(soffice) 사용 (서버/리눅스 등)
             if has_soffice():
                 try:
-                    st.info("PDF 변환: LibreOffice(soffice) 엔진 사용.")
+                    st.info("PDF 변환: LibreOffice(soffice) 엔진 사용 중 (폰트가 일부 바뀔 수 있습니다).")
                     subprocess.run(
                         [
                             "soffice",
@@ -250,7 +254,6 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
 
     return None
 
-        
 # ---------- Streamlit UI ----------
 
 def init_session_state():
