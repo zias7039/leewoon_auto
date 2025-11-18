@@ -432,12 +432,6 @@ def main():
     inject_style()
     init_session_state()
 
-    st.title("납입요청서 자동 생성")
-    st.markdown(
-        '<div class="app-subtitle">엑셀 데이터와 워드 템플릿을 결합해 납입요청서 DOCX/PDF를 만들고, ZIP으로 일괄 내려받는 도구입니다.</div>',
-        unsafe_allow_html=True,
-    )
-
     gen_top = render_top_bar()  # 상단 고정 ZIP 버튼
     sheet_choice, out_name, gen_bottom = render_inputs()  # 2열 레이아웃 입력
 
