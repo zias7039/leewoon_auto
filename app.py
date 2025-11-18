@@ -260,22 +260,6 @@ def init_session_state():
         if key not in st.session_state:
             st.session_state[key] = None
 
-
-def render_top_bar() -> bool:
-    """상단 고정 ZIP 생성 버튼."""
-    st.markdown('<div class="top-bar"><div class="top-bar-inner">', unsafe_allow_html=True)
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.markdown(
-            '<div class="top-bar-title">📦 납입요청서 일괄 생성 도구</div>',
-            unsafe_allow_html=True,
-        )
-    with col2:
-        gen_top = st.button("🚀 ZIP 생성", key="btn_top", use_container_width=True)
-    st.markdown("</div></div>", unsafe_allow_html=True)
-    return gen_top
-
-
 def render_file_uploads():
     """파일 업로드 카드 2개를 가로로 배치"""
     col1, col2 = st.columns(2, gap="large")
