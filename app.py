@@ -196,14 +196,18 @@ def load_workbook_from_bytes(data: bytes, filename: str = "file.xlsx") -> Workbo
 
 
 def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
+    """DOCX → PDF 변환 (MS Word 엔진만 사용).
+       Word가 작동하면 PDF 생성 성공,
+       작동 안 하면 PDF는 None(대체 변환은 사용 안 함)."""
     try:
         with tempfile.TemporaryDirectory() as td:
             in_path = os.path.join(td, "doc.docx")
             out_path = os.path.join(td, "doc.pdf")
+
             with open(in_path, "wb") as f:
                 f.write(docx_bytes)
 
-            # 1) MS Word (docx2pdf)
+            # MS Word(docx2pdf) 변환만 허용
             if docx2pdf_convert is not None:
                 try:
                     docx2pdf_convert(in_path, out_path)
@@ -211,35 +215,13 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
                         with open(out_path, "rb") as f:
                             return f.read()
                 except Exception:
-                    pass
+                    return None
 
-            # 2) LibreOffice
-            if has_soffice():
-                try:
-                    subprocess.run(
-                        [
-                            "soffice",
-                            "--headless",
-                            "--convert-to",
-                            "pdf",
-                            in_path,
-                            "--outdir",
-                            td,
-                        ],
-                        check=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                    )
-                    if os.path.exists(out_path):
-                        with open(out_path, "rb") as f:
-                            return f.read()
-                except Exception:
-                    pass
+            return None  # Word 안 잡히면 PDF 자체를 안 만듦 (폰트 깨짐 방지)
+
     except Exception:
-        pass
-    return None
-
-
+        return None
+        
 # ---------- Streamlit UI ----------
 
 def init_session_state():
