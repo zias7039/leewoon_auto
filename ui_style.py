@@ -65,17 +65,9 @@ footer {visibility: hidden;}
     margin-bottom: 0.6rem !important;
 }
 
-/* 업로더 스타일 */
-[data-testid="stFileUploader"] {
-    margin-top: 0.15rem;
-}
-[data-testid="stFileUploader"] section {
-    padding: 12px 10px;
-    border-radius: 14px;
-}
-
 [data-testid="stUploadedFile"],
-[data-testid="stUploadedFileName"] {
+[data-testid="stUploadedFileName"],
+[data-testid="stFileUploader"] div div:nth-child(2) {
     display: none !important;
 }
 
