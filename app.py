@@ -271,7 +271,7 @@ def render_top_bar() -> bool:
             unsafe_allow_html=True,
         )
     with col2:
-        gen_top = st.button("ZIP 생성", key="btn_top", use_container_width=True)
+        gen_top = st.button("🚀 ZIP 생성", key="btn_top", use_container_width=True)
     st.markdown("</div></div>", unsafe_allow_html=True)
     return gen_top
 
