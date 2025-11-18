@@ -3,6 +3,7 @@ import os
 import re
 import subprocess
 import tempfile
+import platform
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
@@ -17,7 +18,7 @@ from openpyxl.utils.exceptions import InvalidFileException
 
 from ui_style import inject as inject_style, h4, section_caption, small_note
 
-# docx → pdf (환경에 없으면 PDF는 ZIP에 안 넣음)
+# docx → pdf (MS Word or LibreOffice)
 try:
     from docx2pdf import convert as docx2pdf_convert
 except Exception:
@@ -28,7 +29,7 @@ DEFAULT_OUT = f"{datetime.today():%Y%m%d}_#_납입요청서_DB저축은행.docx"
 TARGET_SHEET = "2. 배정후 청약시"
 
 
-# ---------- 유틸 ----------
+# ---------- 유틸 ---------- #
 
 def ensure_docx(name: str) -> str:
     name = (name or "").strip()
@@ -101,7 +102,7 @@ def apply_inline_format(value, fmt: Optional[str]) -> str:
             return value.strftime(f)
         return value_to_text(value)
 
-    # 숫자 포맷 (#,###.00 등)
+    # 숫자 포맷
     if re.fullmatch(r"[#,0]+(?:\.[0#]+)?", fmt.replace(",", "")):
         try:
             num = float(str(value).replace(",", ""))
@@ -113,7 +114,7 @@ def apply_inline_format(value, fmt: Optional[str]) -> str:
     return value_to_text(value)
 
 
-# ---------- DOCX 치환 ----------
+# ---------- DOCX 치환 ---------- #
 
 def replace_in_paragraph(paragraph: Paragraph, repl_func):
     if not paragraph.text:
@@ -182,7 +183,7 @@ def make_replacer(ws):
     return _repl
 
 
-# ---------- 파일 로드 & 변환 ----------
+# ---------- 엑셀/워드 로드 & PDF 변환 ---------- #
 
 def load_workbook_from_bytes(data: bytes, filename: str = "file.xlsx") -> Workbook:
     if not data:
@@ -195,14 +196,11 @@ def load_workbook_from_bytes(data: bytes, filename: str = "file.xlsx") -> Workbo
         raise InvalidFileException(f"엑셀 파일 로드 오류: {e}")
 
 
-import platform
-
 def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
     """
     DOCX → PDF 변환.
-    - 1순위: Windows + MS Word(docx2pdf) 엔진
-    - 2순위: 그 외 환경은 LibreOffice(soffice) 엔진
-    폰트(한컴바탕) 유지가 가장 중요한 경우 → Windows + Word에서 돌릴수록 정확도가 올라간다.
+    - 1순위: Windows + MS Word(docx2pdf)
+    - 2순위: LibreOffice(soffice)
     """
     try:
         with tempfile.TemporaryDirectory() as td:
@@ -214,10 +212,10 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
 
             system = platform.system().lower()
 
-            # 1) Windows + docx2pdf 우선
+            # 1) Windows + docx2pdf (Word) 우선
             if system == "windows" and docx2pdf_convert is not None:
                 try:
-                    st.info("PDF 변환: MS Word(docx2pdf) 엔진 사용 시도 중...")
+                    st.info("PDF 변환: MS Word(docx2pdf) 엔진 사용 중...")
                     docx2pdf_convert(in_path, out_path)
                     if os.path.exists(out_path):
                         with open(out_path, "rb") as f:
@@ -225,7 +223,7 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
                 except Exception as e:
                     st.warning(f"MS Word(docx2pdf) 변환 실패, LibreOffice로 재시도합니다. ({e})")
 
-            # 2) LibreOffice(soffice) 사용 (서버/리눅스 등)
+            # 2) LibreOffice(soffice)
             if has_soffice():
                 try:
                     st.info("PDF 변환: LibreOffice(soffice) 엔진 사용 중 (폰트가 일부 바뀔 수 있습니다).")
@@ -254,20 +252,37 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
 
     return None
 
-# ---------- Streamlit UI ----------
+
+# ---------- Streamlit UI ---------- #
 
 def init_session_state():
     for key in ("xlsx_data", "xlsx_name", "docx_data", "docx_name"):
         if key not in st.session_state:
             st.session_state[key] = None
 
+
+def render_top_bar() -> bool:
+    """상단 고정 ZIP 생성 버튼."""
+    st.markdown('<div class="top-bar"><div class="top-bar-inner">', unsafe_allow_html=True)
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown(
+            '<div class="top-bar-title">납입요청서 일괄 생성 · ZIP 다운로드</div>',
+            unsafe_allow_html=True,
+        )
+    with col2:
+        gen_top = st.button("ZIP 생성", key="btn_top", use_container_width=True)
+    st.markdown("</div></div>", unsafe_allow_html=True)
+    return gen_top
+
+
 def render_inputs():
-    """2열 레이아웃 입력 카드."""
+    """엑셀/워드 업로더 2열 + 시트 선택 + 파일명 + 하단 ZIP 버튼."""
     st.markdown('<div class="app-card">', unsafe_allow_html=True)
 
     col_left, col_right = st.columns(2)
 
-    # 왼쪽: 엑셀 업로드
+    # 왼쪽: 엑셀
     with col_left:
         h4("엑셀 파일")
         section_caption("청약/납입 데이터가 들어있는 엑셀 파일")
@@ -284,7 +299,7 @@ def render_inputs():
             except Exception as e:
                 st.error(f"엑셀 파일 읽기 오류: {e}")
 
-    # 오른쪽: 워드 업로드
+    # 오른쪽: 워드
     with col_right:
         h4("워드 템플릿 (.docx)")
         section_caption("{{A1}}, {{B5|#,###}}, {{C3|YYYY.MM.DD}} 태그가 포함된 템플릿")
@@ -303,7 +318,7 @@ def render_inputs():
 
     st.markdown("---")
 
-    # 시트 선택 + 출력 파일명 + 하단 ZIP 버튼
+    # 시트 선택
     sheet_choice = None
     if st.session_state.xlsx_data:
         try:
@@ -317,6 +332,7 @@ def render_inputs():
         except Exception as e:
             st.error(f"엑셀 시트 읽기 오류: {e}")
 
+    # 출력 파일명 + 하단 ZIP
     h4("출력 파일명")
     out_name = st.text_input("파일명", value=DEFAULT_OUT)
 
@@ -366,12 +382,13 @@ def handle_generate(sheet_choice: Optional[str], out_name: str):
             docx_bytes = buf.getvalue()
             progress.progress(75)
 
-            # 5) PDF 변환 (가능한 경우)
+            # 5) PDF 변환
             pdf_bytes = convert_docx_to_pdf_bytes(docx_bytes)
             pdf_ok = pdf_bytes is not None
             progress.progress(90)
 
         progress.progress(100)
+
     except InvalidFileException as e:
         st.error(str(e))
         return
@@ -412,12 +429,20 @@ def render_zip_download(
     )
 
 
+# ---------- main ---------- #
+
 def main():
     inject_style()
     init_session_state()
 
-    gen_top = render_top_bar()  # 상단 고정 ZIP 버튼
-    sheet_choice, out_name, gen_bottom = render_inputs()  # 2열 레이아웃 입력
+    st.title("납입요청서 자동 생성")
+    st.markdown(
+        '<div class="app-subtitle">엑셀 데이터와 워드 템플릿을 결합해 납입요청서 DOCX/PDF를 만들고, ZIP으로 일괄 내려받는 도구입니다.</div>',
+        unsafe_allow_html=True,
+    )
+
+    gen_top = render_top_bar()
+    sheet_choice, out_name, gen_bottom = render_inputs()
 
     generate = gen_top or gen_bottom
     if generate:
