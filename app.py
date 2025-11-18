@@ -278,16 +278,14 @@ def render_top_bar() -> bool:
 
 def render_file_uploads():
     """파일 업로드 카드 2개를 가로로 배치"""
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2, gap="large")
     
     with col1:
         st.markdown('''
-        <div class="upload-card">
-            <div class="card-header">
-                <div class="card-icon">📊</div>
-                <div class="card-title">엑셀 파일</div>
-            </div>
-            <div class="card-description">청약/납입 데이터가 들어있는 엑셀 파일을 업로드하세요</div>
+        <div class="excel-card">
+            <div class="card-icon">📊</div>
+            <div class="card-title">엑셀 파일</div>
+            <div class="card-description">청약/납입 데이터가 들어있는 엑셀 파일</div>
         </div>
         ''', unsafe_allow_html=True)
         
@@ -306,11 +304,9 @@ def render_file_uploads():
     
     with col2:
         st.markdown('''
-        <div class="upload-card">
-            <div class="card-header">
-                <div class="card-icon">📝</div>
-                <div class="card-title">워드 템플릿</div>
-            </div>
+        <div class="word-card">
+            <div class="card-icon">📝</div>
+            <div class="card-title">워드 템플릿</div>
             <div class="card-description">{{A1}}, {{B5|#,###}} 형식의 태그가 포함된 템플릿</div>
         </div>
         ''', unsafe_allow_html=True)
@@ -331,7 +327,9 @@ def render_file_uploads():
 
 def render_options():
     """옵션 설정 영역"""
-    st.markdown('<div style="margin-top: 1.5rem;"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="height: 2rem;"></div>', unsafe_allow_html=True)
+    
+    st.markdown('<div class="options-section">', unsafe_allow_html=True)
     
     sheet_choice = None
     if st.session_state.xlsx_data:
@@ -342,7 +340,7 @@ def render_options():
             sheets = wb.sheetnames
             index = sheets.index(TARGET_SHEET) if TARGET_SHEET in sheets else 0
             
-            col1, col2 = st.columns(2)
+            col1, col2 = st.columns(2, gap="large")
             with col1:
                 sheet_choice = st.selectbox("📑 사용할 시트", sheets, index=index)
             with col2:
@@ -353,8 +351,10 @@ def render_options():
     else:
         out_name = st.text_input("📄 출력 파일명", value=DEFAULT_OUT)
     
-    st.markdown('<div style="margin-top: 1.5rem;"></div>', unsafe_allow_html=True)
-    gen_bottom = st.button("ZIP 생성", key="btn_bottom", use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.markdown('<div style="height: 2rem;"></div>', unsafe_allow_html=True)
+    gen_bottom = st.button("🚀 ZIP 생성", key="btn_bottom", use_container_width=True)
     
     return sheet_choice, out_name, gen_bottom
 
