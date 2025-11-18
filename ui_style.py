@@ -15,6 +15,11 @@ html, body, [data-testid="stAppViewContainer"] {
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 
+/* 🚫 최상단 빈 입력창/여백 컨테이너 제거 */
+[data-testid="stAppViewContainer"] > div:first-child {
+    display: none !important;
+}
+
 .block-container {
     padding: 0 1.5rem 3rem !important;
     max-width: 1200px !important;
