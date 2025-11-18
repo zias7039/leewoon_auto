@@ -399,20 +399,6 @@ def handle_generate(sheet_choice: Optional[str], out_name: str):
     st.success("✅ ZIP 파일이 준비되었습니다!")
     render_zip_download(docx_bytes, pdf_bytes, pdf_ok, out_name)
 
-def render_top_bar() -> bool:
-    """상단 고정 ZIP 생성 버튼."""
-    st.markdown('<div class="top-bar"><div class="top-bar-inner">', unsafe_allow_html=True)
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.markdown(
-            '<div class="top-bar-title">📦 납입요청서 일괄 생성 도구</div>',
-            unsafe_allow_html=True,
-        )
-    with col2:
-        gen_top = st.button("🚀 ZIP 생성", key="btn_top", use_container_width=True)
-    st.markdown("</div></div>", unsafe_allow_html=True)
-    return gen_top
-
 def render_zip_download(
     docx_bytes: bytes,
     pdf_bytes: Optional[bytes],
@@ -448,11 +434,10 @@ def main():
     inject_style()
     init_session_state()
 
-    gen_top = render_top_bar()
     render_file_uploads()
     sheet_choice, out_name, gen_bottom = render_options()
 
-    generate = gen_top or gen_bottom
+    generate = gen_bottom
     if generate:
         handle_generate(sheet_choice, out_name)
 
