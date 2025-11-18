@@ -16,20 +16,9 @@ html, body, [data-testid="stAppViewContainer"] {
 footer {visibility: hidden;}
 
 .block-container {
-    padding: 0 1.5rem 3rem !important;
+    padding: 1.5rem 1.5rem 3rem;
     max-width: 1200px !important;
     margin: auto;
-    padding-top: 0 !important;
-}
-
-/* 모든 상단 여백 제거 */
-.main > div:first-child {
-    padding-top: 0 !important;
-}
-
-.block-container > div:first-child {
-    padding-top: 0 !important;
-    margin-top: 0 !important;
 }
 
 /* 헤더 영역 숨김 */
@@ -41,24 +30,12 @@ h1 {
     display: none !important;
 }
 
-/* 최상단 빈 컨테이너 완전 제거 */
-.block-container > div[data-testid="stVerticalBlock"]:first-child > div:first-child:empty,
-.block-container > div[data-testid="stVerticalBlock"]:first-child > div:first-child > div:empty,
-.block-container > div:first-child:empty,
-div[data-testid="stVerticalBlock"] > div:empty,
-div[data-testid="stHorizontalBlock"] > div:empty {
-    display: none !important;
-    height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-}
-
 /* 상단 고정 바 */
 .top-bar {
     position: sticky;
     top: 0;
     z-index: 100;
-    padding: 1.5rem 0 1.5rem;
+    padding: 0 0 1.5rem;
     margin-bottom: 1.5rem;
 }
 
@@ -77,6 +54,11 @@ div[data-testid="stHorizontalBlock"] > div:empty {
     font-weight: 700;
     color: #ffffff;
     letter-spacing: -0.02em;
+}
+
+/* 상단 빈 박스 숨김 */
+.top-bar + div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"]:first-child {
+    display: none !important;
 }
 
 /* 2열 그리드 레이아웃 */
@@ -458,17 +440,8 @@ div[data-testid="stMarkdownContainer"] p:empty {
 /* 다크 모드 */
 @media (prefers-color-scheme: dark) {
     html, body, [data-testid="stAppViewContainer"] {
-    background: #ffffff;
-}
-
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-
-/* 🚫 최상단 빈 입력창/여백 컨테이너 제거 */
-[data-testid="stAppViewContainer"] > div:first-child {
-    display: none !important;
-}
-
+        background: #0f172a;
+    }
     
     .block-container {
         background: #0f172a;
