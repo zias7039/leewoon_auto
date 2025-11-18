@@ -21,20 +21,6 @@ footer {visibility: hidden;}
     margin: auto;
 }
 
-/* 헤더 영역 숨김 */
-h1 {
-    display: none !important;
-}
-
-.app-subtitle {
-    display: none !important;
-}
-
-/* 상단 빈 박스 숨김 */
-.top-bar + div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"]:first-child {
-    display: none !important;
-}
-
 /* 2열 그리드 레이아웃 */
 .upload-grid {
     display: grid;
