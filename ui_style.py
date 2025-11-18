@@ -30,12 +30,24 @@ h1 {
     display: none !important;
 }
 
+/* 최상단 빈 컨테이너 숨김 */
+.block-container > div[data-testid="stVerticalBlock"]:first-child > div:first-child:empty,
+.block-container > div[data-testid="stVerticalBlock"]:first-child > div:first-child > div:empty {
+    display: none !important;
+}
+
+/* 모든 빈 div 숨김 */
+div[data-testid="stVerticalBlock"] > div:empty,
+div[data-testid="stHorizontalBlock"] > div:empty {
+    display: none !important;
+}
+
 /* 상단 고정 바 */
 .top-bar {
     position: sticky;
     top: 0;
     z-index: 100;
-    padding: 0 0 2rem;
+    padding: 0 0 1.5rem;
     margin-bottom: 1.5rem;
 }
 
@@ -56,6 +68,11 @@ h1 {
     letter-spacing: -0.02em;
 }
 
+/* 상단 빈 박스 숨김 */
+.top-bar + div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"]:first-child {
+    display: none !important;
+}
+
 /* 2열 그리드 레이아웃 */
 .upload-grid {
     display: grid;
@@ -68,11 +85,12 @@ h1 {
 .excel-card {
     background: #ffffff;
     border-radius: 20px;
-    padding: 2rem 2rem 1.5rem;
+    padding: 1.5rem;
     border: 2px solid #d1fae5;
     transition: all 0.3s ease;
     box-shadow: 0 4px 12px rgba(16, 185, 129, 0.08);
-    min-height: 240px;
+    display: flex;
+    flex-direction: column;
 }
 
 .excel-card:hover {
@@ -90,14 +108,14 @@ h1 {
     align-items: center;
     justify-content: center;
     font-size: 1.5rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0.8rem;
 }
 
 .excel-card .card-title {
     font-size: 1.25rem;
     font-weight: 700;
     color: #065f46;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
 }
 
 .excel-card .card-description {
@@ -108,11 +126,12 @@ h1 {
 .word-card {
     background: #ffffff;
     border-radius: 20px;
-    padding: 2rem 2rem 1.5rem;
+    padding: 1.5rem;
     border: 2px solid #dbeafe;
     transition: all 0.3s ease;
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
-    min-height: 240px;
+    display: flex;
+    flex-direction: column;
 }
 
 .word-card:hover {
@@ -130,14 +149,14 @@ h1 {
     align-items: center;
     justify-content: center;
     font-size: 1.5rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0.8rem;
 }
 
 .word-card .card-title {
     font-size: 1.25rem;
     font-weight: 700;
     color: #1e40af;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
 }
 
 .word-card .card-description {
@@ -328,8 +347,9 @@ input[type="text"]:focus {
     box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
 }
 
-/* 성공/에러 메시지 숨김 */
-.stSuccess {
+/* 성공/에러 메시지 - 성공 완전히 숨김 */
+.stSuccess,
+[data-testid="stNotificationContentSuccess"] {
     display: none !important;
 }
 
@@ -337,6 +357,15 @@ input[type="text"]:focus {
     background: #fef2f2 !important;
     border-left: 4px solid #ef4444 !important;
     color: #991b1b !important;
+    border-radius: 12px !important;
+    padding: 1rem 1.2rem !important;
+    font-weight: 500 !important;
+}
+
+.stInfo {
+    background: #eff6ff !important;
+    border-left: 4px solid #3b82f6 !important;
+    color: #1e40af !important;
     border-radius: 12px !important;
     padding: 1rem 1.2rem !important;
     font-weight: 500 !important;
