@@ -74,7 +74,8 @@ footer {visibility: hidden;}
     border-radius: 14px;
 }
 
-[data-testid="stUploadedFile"] {
+[data-testid="stUploadedFile"],
+[data-testid="stUploadedFileName"] {
     display: none !important;
 }
 
