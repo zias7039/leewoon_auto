@@ -30,32 +30,6 @@ h1 {
     display: none !important;
 }
 
-/* 상단 고정 바 */
-.top-bar {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    padding: 0 0 1.5rem;
-    margin-bottom: 1.5rem;
-}
-
-.top-bar-inner {
-    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-    border-radius: 16px;
-    padding: 1.2rem 2rem;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.top-bar-title {
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: #ffffff;
-    letter-spacing: -0.02em;
-}
-
 /* 상단 빈 박스 숨김 */
 .top-bar + div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"]:first-child {
     display: none !important;
