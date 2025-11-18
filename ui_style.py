@@ -16,26 +16,18 @@ html, body, [data-testid="stAppViewContainer"] {
 footer {visibility: hidden;}
 
 .block-container {
-    padding: 2rem 1.5rem 3rem;
+    padding: 1.5rem 1.5rem 3rem;
     max-width: 1200px !important;
     margin: auto;
 }
 
-/* 헤더 영역 */
+/* 헤더 영역 숨김 */
 h1 {
-    font-size: 2rem !important;
-    font-weight: 800 !important;
-    color: #0f172a !important;
-    margin-bottom: 0.5rem !important;
-    letter-spacing: -0.03em;
+    display: none !important;
 }
 
 .app-subtitle {
-    font-size: 1rem;
-    color: #64748b;
-    margin-bottom: 2rem !important;
-    font-weight: 500;
-    line-height: 1.6;
+    display: none !important;
 }
 
 /* 상단 고정 바 */
@@ -43,8 +35,8 @@ h1 {
     position: sticky;
     top: 0;
     z-index: 100;
-    padding: 0 0 1.5rem;
-    margin-bottom: 2rem;
+    padding: 0 0 2rem;
+    margin-bottom: 1.5rem;
 }
 
 .top-bar-inner {
@@ -76,10 +68,11 @@ h1 {
 .excel-card {
     background: #ffffff;
     border-radius: 20px;
-    padding: 2rem;
+    padding: 2rem 2rem 1.5rem;
     border: 2px solid #d1fae5;
     transition: all 0.3s ease;
     box-shadow: 0 4px 12px rgba(16, 185, 129, 0.08);
+    min-height: 240px;
 }
 
 .excel-card:hover {
@@ -104,24 +97,22 @@ h1 {
     font-size: 1.25rem;
     font-weight: 700;
     color: #065f46;
-    margin-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
 }
 
 .excel-card .card-description {
-    font-size: 0.9rem;
-    color: #059669;
-    line-height: 1.5;
-    margin-bottom: 1.5rem;
+    display: none;
 }
 
 /* 워드 카드 - 파란색 */
 .word-card {
     background: #ffffff;
     border-radius: 20px;
-    padding: 2rem;
+    padding: 2rem 2rem 1.5rem;
     border: 2px solid #dbeafe;
     transition: all 0.3s ease;
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
+    min-height: 240px;
 }
 
 .word-card:hover {
@@ -146,24 +137,22 @@ h1 {
     font-size: 1.25rem;
     font-weight: 700;
     color: #1e40af;
-    margin-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
 }
 
 .word-card .card-description {
-    font-size: 0.9rem;
-    color: #2563eb;
-    line-height: 1.5;
-    margin-bottom: 1.5rem;
+    display: none;
 }
 
 /* 파일 업로더 - 엑셀용 (초록색) */
 .excel-card [data-testid="stFileUploader"] {
     border: 2px dashed #86efac;
     border-radius: 16px;
-    padding: 2rem 1.5rem;
+    padding: 3rem 1.5rem;
     background: #f0fdf4;
     transition: all 0.3s ease;
     text-align: center;
+    margin-top: 0;
 }
 
 .excel-card [data-testid="stFileUploader"]:hover {
@@ -192,10 +181,11 @@ h1 {
 .word-card [data-testid="stFileUploader"] {
     border: 2px dashed #93c5fd;
     border-radius: 16px;
-    padding: 2rem 1.5rem;
+    padding: 3rem 1.5rem;
     background: #eff6ff;
     transition: all 0.3s ease;
     text-align: center;
+    margin-top: 0;
 }
 
 .word-card [data-testid="stFileUploader"]:hover {
@@ -231,9 +221,24 @@ h1 {
     display: none !important;
 }
 
-/* 업로드 완료 표시 숨김 */
+/* 파일 업로더 내 모든 텍스트 숨김 */
+[data-testid="stFileUploader"] small,
+[data-testid="stFileUploader"] [data-testid="stMarkdownContainer"] {
+    display: none !important;
+}
+
+/* 업로드 완료 표시 완전히 숨김 */
 [data-testid="stUploadedFile"],
-[data-testid="stUploadedFileName"] {
+[data-testid="stUploadedFileName"],
+[data-testid="stFileUploader"] > div > div:not(:has(button)) {
+    display: none !important;
+}
+
+.stSuccess {
+    display: none !important;
+}
+
+.stAlert[data-baseweb="notification"] {
     display: none !important;
 }
 
@@ -323,14 +328,9 @@ input[type="text"]:focus {
     box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
 }
 
-/* 성공/에러 메시지 */
+/* 성공/에러 메시지 숨김 */
 .stSuccess {
-    background: #f0fdf4 !important;
-    border-left: 4px solid #22c55e !important;
-    color: #166534 !important;
-    border-radius: 12px !important;
-    padding: 1rem 1.2rem !important;
-    font-weight: 500 !important;
+    display: none !important;
 }
 
 .stError {
