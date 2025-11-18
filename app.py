@@ -16,7 +16,7 @@ from docx.text.paragraph import Paragraph
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 
-from ui_style import inject as inject_style, h4, section_caption, small_note
+from ui_style import inject as inject_style
 
 # docx → pdf (MS Word or LibreOffice)
 try:
@@ -267,7 +267,7 @@ def render_top_bar() -> bool:
     col1, col2 = st.columns([3, 1])
     with col1:
         st.markdown(
-            '<div class="top-bar-title">납입요청서 일괄 생성 · ZIP 다운로드</div>',
+            '<div class="top-bar-title">📦 납입요청서 일괄 생성 도구</div>',
             unsafe_allow_html=True,
         )
     with col2:
@@ -276,49 +276,63 @@ def render_top_bar() -> bool:
     return gen_top
 
 
-def render_inputs():
-    """엑셀/워드 업로더 2열 + 시트 선택 + 파일명 + 하단 ZIP 버튼."""
-    st.markdown('<div class="app-card">', unsafe_allow_html=True)
-
-    col_left, col_right = st.columns(2)
-
-    # 왼쪽: 엑셀
-    with col_left:
-        h4("엑셀 파일")
-        section_caption("청약/납입 데이터가 들어있는 엑셀 파일")
-        xlsx_file = st.file_uploader("엑셀 업로드", type=["xlsx", "xlsm"], key="xlsx")
+def render_file_uploads():
+    """파일 업로드 카드 2개를 가로로 배치"""
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown('''
+        <div class="upload-card">
+            <div class="card-header">
+                <div class="card-icon">📊</div>
+                <div class="card-title">엑셀 파일</div>
+            </div>
+            <div class="card-description">청약/납입 데이터가 들어있는 엑셀 파일을 업로드하세요</div>
+        </div>
+        ''', unsafe_allow_html=True)
+        
+        xlsx_file = st.file_uploader("엑셀 업로드", type=["xlsx", "xlsm"], key="xlsx", label_visibility="collapsed")
         if xlsx_file is not None:
             try:
                 data = xlsx_file.getvalue()
                 if data:
                     st.session_state.xlsx_data = data
                     st.session_state.xlsx_name = xlsx_file.name
-                    st.success(f"{xlsx_file.name}: {len(data):,} bytes")
+                    st.success(f"✓ {xlsx_file.name} ({len(data):,} bytes)")
                 else:
                     st.error("엑셀 파일이 0 bytes입니다.")
             except Exception as e:
                 st.error(f"엑셀 파일 읽기 오류: {e}")
-
-    # 오른쪽: 워드
-    with col_right:
-        h4("워드 템플릿 (.docx)")
-        section_caption("{{A1}}, {{B5|#,###}}, {{C3|YYYY.MM.DD}} 태그가 포함된 템플릿")
-        docx_file = st.file_uploader("워드 템플릿 업로드", type=["docx"], key="docx")
+    
+    with col2:
+        st.markdown('''
+        <div class="upload-card">
+            <div class="card-header">
+                <div class="card-icon">📝</div>
+                <div class="card-title">워드 템플릿</div>
+            </div>
+            <div class="card-description">{{A1}}, {{B5|#,###}} 형식의 태그가 포함된 템플릿</div>
+        </div>
+        ''', unsafe_allow_html=True)
+        
+        docx_file = st.file_uploader("워드 템플릿 업로드", type=["docx"], key="docx", label_visibility="collapsed")
         if docx_file is not None:
             try:
                 data = docx_file.getvalue()
                 if data:
                     st.session_state.docx_data = data
                     st.session_state.docx_name = docx_file.name
-                    st.success(f"{docx_file.name}: {len(data):,} bytes")
+                    st.success(f"✓ {docx_file.name} ({len(data):,} bytes)")
                 else:
                     st.error("워드 템플릿이 0 bytes입니다.")
             except Exception as e:
                 st.error(f"워드 파일 읽기 오류: {e}")
 
-    st.markdown("---")
 
-    # 시트 선택
+def render_options():
+    """옵션 설정 영역"""
+    st.markdown('<div style="margin-top: 1.5rem;"></div>', unsafe_allow_html=True)
+    
     sheet_choice = None
     if st.session_state.xlsx_data:
         try:
@@ -327,19 +341,21 @@ def render_inputs():
             )
             sheets = wb.sheetnames
             index = sheets.index(TARGET_SHEET) if TARGET_SHEET in sheets else 0
-            h4("사용할 시트")
-            sheet_choice = st.selectbox("시트 선택", sheets, index=index)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                sheet_choice = st.selectbox("📑 사용할 시트", sheets, index=index)
+            with col2:
+                out_name = st.text_input("📄 출력 파일명", value=DEFAULT_OUT)
         except Exception as e:
             st.error(f"엑셀 시트 읽기 오류: {e}")
-
-    # 출력 파일명 + 하단 ZIP
-    h4("출력 파일명")
-    out_name = st.text_input("파일명", value=DEFAULT_OUT)
-
+            out_name = DEFAULT_OUT
+    else:
+        out_name = st.text_input("📄 출력 파일명", value=DEFAULT_OUT)
+    
+    st.markdown('<div style="margin-top: 1.5rem;"></div>', unsafe_allow_html=True)
     gen_bottom = st.button("ZIP 생성", key="btn_bottom", use_container_width=True)
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
+    
     return sheet_choice, out_name, gen_bottom
 
 
@@ -396,7 +412,7 @@ def handle_generate(sheet_choice: Optional[str], out_name: str):
         st.exception(e)
         return
 
-    st.success("ZIP 파일이 준비되었습니다.")
+    st.success("✅ ZIP 파일이 준비되었습니다!")
     render_zip_download(docx_bytes, pdf_bytes, pdf_ok, out_name)
 
 
@@ -422,7 +438,7 @@ def render_zip_download(
     zip_name = f"{base_zip_name}_both.zip"
 
     st.download_button(
-        "ZIP 다운로드 (WORD + PDF)",
+        "📥 ZIP 다운로드 (WORD + PDF)",
         data=zip_buf,
         file_name=zip_name,
         use_container_width=True,
@@ -437,12 +453,13 @@ def main():
 
     st.title("납입요청서 자동 생성")
     st.markdown(
-        '<div class="app-subtitle">엑셀 데이터와 워드 템플릿을 결합해 납입요청서 DOCX/PDF를 만들고, ZIP으로 일괄 내려받는 도구입니다.</div>',
+        '<div class="app-subtitle">엑셀 데이터와 워드 템플릿을 결합해 납입요청서 DOCX/PDF를 만들고, ZIP으로 일괄 다운로드하는 도구입니다.</div>',
         unsafe_allow_html=True,
     )
 
     gen_top = render_top_bar()
-    sheet_choice, out_name, gen_bottom = render_inputs()
+    render_file_uploads()
+    sheet_choice, out_name, gen_bottom = render_options()
 
     generate = gen_top or gen_bottom
     if generate:
