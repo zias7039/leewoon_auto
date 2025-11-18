@@ -265,14 +265,15 @@ def init_session_state():
 def render_top_bar() -> bool:
     """상단 고정 ZIP 생성 버튼."""
     st.markdown('<div class="top-bar"><div class="top-bar-inner">', unsafe_allow_html=True)
+    
     col1, col2 = st.columns([3, 1])
     with col1:
-        st.markdown(
-            '<div class="top-bar-title">납입요청서 일괄 생성 · ZIP 다운로드</div>',
-            unsafe_allow_html=True,
-        )
+        # 문구 완전 제거 — 아무것도 렌더링하지 않음
+        st.markdown("", unsafe_allow_html=True)
+
     with col2:
         gen_top = st.button("ZIP 생성", key="btn_top", use_container_width=True)
+
     st.markdown("</div></div>", unsafe_allow_html=True)
     return gen_top
 
