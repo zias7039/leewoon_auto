@@ -196,9 +196,10 @@ def load_workbook_from_bytes(data: bytes, filename: str = "file.xlsx") -> Workbo
 
 
 def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
-    """DOCX → PDF 변환 (MS Word 엔진만 사용).
-       Word가 작동하면 PDF 생성 성공,
-       작동 안 하면 PDF는 None(대체 변환은 사용 안 함)."""
+    """DOCX 바이트를 PDF 바이트로 변환.
+    - 1순위: MS Word(docx2pdf) 사용 (Windows/Mac에서 Word가 있을 때)
+    - 2순위: LibreOffice(soffice) 사용 (리눅스/서버 환경)
+    """
     try:
         with tempfile.TemporaryDirectory() as td:
             in_path = os.path.join(td, "doc.docx")
@@ -207,20 +208,48 @@ def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
             with open(in_path, "wb") as f:
                 f.write(docx_bytes)
 
-            # MS Word(docx2pdf) 변환만 허용
+            # 1) MS Word(docx2pdf) 우선 시도
             if docx2pdf_convert is not None:
                 try:
+                    # 여기서 Word를 쓰는지, LibreOffice를 쓰는지는
+                    # docx2pdf 설치 환경에 따라 다름.
+                    st.info("PDF 변환: docx2pdf 엔진 사용 시도 (MS Word 우선).")
                     docx2pdf_convert(in_path, out_path)
                     if os.path.exists(out_path):
                         with open(out_path, "rb") as f:
                             return f.read()
-                except Exception:
-                    return None
+                except Exception as e:
+                    st.warning(f"docx2pdf 변환 실패, LibreOffice로 재시도합니다. ({e})")
 
-            return None  # Word 안 잡히면 PDF 자체를 안 만듦 (폰트 깨짐 방지)
+            # 2) LibreOffice(soffice) 직접 호출
+            if has_soffice():
+                try:
+                    st.info("PDF 변환: LibreOffice(soffice) 엔진 사용.")
+                    subprocess.run(
+                        [
+                            "soffice",
+                            "--headless",
+                            "--convert-to",
+                            "pdf",
+                            in_path,
+                            "--outdir",
+                            td,
+                        ],
+                        check=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                    )
+                    if os.path.exists(out_path):
+                        with open(out_path, "rb") as f:
+                            return f.read()
+                except Exception as e:
+                    st.error(f"LibreOffice 변환 실패: {e}")
 
-    except Exception:
-        return None
+    except Exception as e:
+        st.error(f"PDF 변환 중 예외 발생: {e}")
+
+    return None
+
         
 # ---------- Streamlit UI ----------
 
