@@ -1,470 +1,561 @@
-import io
-import os
-import re
-import subprocess
-import tempfile
-import platform
-from datetime import date, datetime
-from decimal import Decimal
-from typing import Optional
-from zipfile import BadZipFile, ZipFile, ZIP_DEFLATED
-
 import streamlit as st
-from docx import Document
-from docx.table import _Cell
-from docx.text.paragraph import Paragraph
-from openpyxl import Workbook, load_workbook
-from openpyxl.utils.exceptions import InvalidFileException
 
-from ui_style import inject as inject_style
+BASE_CSS = """
+/* 전체 폰트 및 배경 */
+@import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap');
 
-# docx → pdf (MS Word or LibreOffice)
-try:
-    from docx2pdf import convert as docx2pdf_convert
-except Exception:
-    docx2pdf_convert = None
+* {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+}
 
-TOKEN_RE = re.compile(r"\{\{([A-Z]+[0-9]+)(?:\|([^}]+))?\}\}")
-DEFAULT_OUT = f"{datetime.today():%Y%m%d}_#_납입요청서_DB저축은행.docx"
-TARGET_SHEET = "2. 배정후 청약시"
+html, body, [data-testid="stAppViewContainer"] {
+    background: #ffffff;
+}
 
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
 
-# ---------- 유틸 ---------- #
+.block-container {
+    padding: 2rem 1.5rem 3rem;
+    max-width: 1200px !important;
+    margin: auto;
+}
 
-def ensure_docx(name: str) -> str:
-    name = (name or "").strip()
-    return name if name.lower().endswith(".docx") else name + ".docx"
+/* 헤더 영역 */
+h1 {
+    font-size: 2rem !important;
+    font-weight: 800 !important;
+    color: #0f172a !important;
+    margin-bottom: 0.5rem !important;
+    letter-spacing: -0.03em;
+}
 
+.app-subtitle {
+    font-size: 1rem;
+    color: #64748b;
+    margin-bottom: 2rem !important;
+    font-weight: 500;
+    line-height: 1.6;
+}
 
-def ensure_pdf(name: str) -> str:
-    base = (name or "output").strip()
-    return base if base.lower().endswith(".pdf") else base + ".pdf"
+/* 상단 고정 바 */
+.top-bar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    padding: 0 0 1.5rem;
+    margin-bottom: 2rem;
+}
 
+.top-bar-inner {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    border-radius: 16px;
+    padding: 1.2rem 2rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
 
-def has_soffice() -> bool:
-    try:
-        subprocess.run(
-            ["soffice", "--version"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=False,
-        )
-        return True
-    except FileNotFoundError:
-        return False
+.top-bar-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+}
 
+/* 2열 그리드 레이아웃 */
+.upload-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
 
-def try_format_as_date(v) -> str:
-    try:
-        if isinstance(v, (datetime, date)):
-            return f"{v.year}. {v.month}. {v.day}."
-        if isinstance(v, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", v.strip()):
-            dt = datetime.strptime(v.strip(), "%Y-%m-%d").date()
-            return f"{dt.year}. {dt.month}. {dt.day}."
-    except Exception:
-        pass
-    return ""
+/* 엑셀 카드 - 초록색 */
+.excel-card {
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 2rem;
+    border: 2px solid #d1fae5;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.08);
+}
 
+.excel-card:hover {
+    border-color: #10b981;
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.15);
+    transform: translateY(-2px);
+}
 
-def fmt_number(v) -> str:
-    try:
-        if isinstance(v, (int, float, Decimal)):
-            return f"{float(v):,.0f}"
-        if isinstance(v, str):
-            raw = v.replace(",", "")
-            if re.fullmatch(r"-?\d+(\.\d+)?", raw):
-                return f"{float(raw):,.0f}"
-    except Exception:
-        pass
-    return ""
+.excel-card .card-icon {
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, #10b981, #059669);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+}
 
+.excel-card .card-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #065f46;
+    margin-bottom: 0.5rem;
+}
 
-def value_to_text(v) -> str:
-    s = try_format_as_date(v)
-    if s:
-        return s
-    s = fmt_number(v)
-    if s:
-        return s
-    return "" if v is None else str(v)
+.excel-card .card-description {
+    font-size: 0.9rem;
+    color: #059669;
+    line-height: 1.5;
+    margin-bottom: 1.5rem;
+}
 
+/* 워드 카드 - 파란색 */
+.word-card {
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 2rem;
+    border: 2px solid #dbeafe;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
+}
 
-def apply_inline_format(value, fmt: Optional[str]) -> str:
-    if not fmt or not fmt.strip():
-        return value_to_text(value)
+.word-card:hover {
+    border-color: #3b82f6;
+    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15);
+    transform: translateY(-2px);
+}
 
-    # 날짜 포맷
-    if any(tok in fmt for tok in ("YYYY", "MM", "DD")):
-        if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip()):
-            value = datetime.strptime(value.strip(), "%Y-%m-%d").date()
-        if isinstance(value, (datetime, date)):
-            f = fmt.replace("YYYY", "%Y").replace("MM", "%m").replace("DD", "%d")
-            return value.strftime(f)
-        return value_to_text(value)
+.word-card .card-icon {
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+}
 
-    # 숫자 포맷
-    if re.fullmatch(r"[#,0]+(?:\.[0#]+)?", fmt.replace(",", "")):
-        try:
-            num = float(str(value).replace(",", ""))
-            decimals = len(fmt.split(".")[1]) if "." in fmt else 0
-            return f"{num:,.{decimals}f}"
-        except Exception:
-            return value_to_text(value)
+.word-card .card-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1e40af;
+    margin-bottom: 0.5rem;
+}
 
-    return value_to_text(value)
+.word-card .card-description {
+    font-size: 0.9rem;
+    color: #2563eb;
+    line-height: 1.5;
+    margin-bottom: 1.5rem;
+}
 
+/* 파일 업로더 - 엑셀용 (초록색) */
+.excel-card [data-testid="stFileUploader"] {
+    border: 2px dashed #86efac;
+    border-radius: 16px;
+    padding: 2rem 1.5rem;
+    background: #f0fdf4;
+    transition: all 0.3s ease;
+    text-align: center;
+}
 
-# ---------- DOCX 치환 ---------- #
+.excel-card [data-testid="stFileUploader"]:hover {
+    border-color: #10b981;
+    background: #dcfce7;
+}
 
-def replace_in_paragraph(paragraph: Paragraph, repl_func):
-    if not paragraph.text:
-        return
-    new_text = repl_func(paragraph.text)
-    if new_text == paragraph.text:
-        return
-    for run in paragraph.runs:
-        run.text = ""
-    if paragraph.runs:
-        paragraph.runs[0].text = new_text
-    else:
-        paragraph.add_run(new_text)
+.excel-card [data-testid="stFileUploader"] button {
+    background: linear-gradient(135deg, #10b981, #059669) !important;
+    color: white !important;
+    border: none !important;
+    padding: 0.75rem 2rem !important;
+    border-radius: 12px !important;
+    font-weight: 600 !important;
+    font-size: 0.95rem !important;
+    transition: all 0.2s ease !important;
+}
 
+.excel-card [data-testid="stFileUploader"] button:hover {
+    background: linear-gradient(135deg, #059669, #047857) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
+}
 
-def replace_in_table(cell: _Cell, repl_func):
-    for p in cell.paragraphs:
-        replace_in_paragraph(p, repl_func)
-    for t in cell.tables:
-        for row in t.rows:
-            for c in row.cells:
-                replace_in_table(c, repl_func)
+/* 파일 업로더 - 워드용 (파란색) */
+.word-card [data-testid="stFileUploader"] {
+    border: 2px dashed #93c5fd;
+    border-radius: 16px;
+    padding: 2rem 1.5rem;
+    background: #eff6ff;
+    transition: all 0.3s ease;
+    text-align: center;
+}
 
+.word-card [data-testid="stFileUploader"]:hover {
+    border-color: #3b82f6;
+    background: #dbeafe;
+}
 
-def iter_block_items(parent):
-    if hasattr(parent, "paragraphs") and hasattr(parent, "tables"):
-        for p in parent.paragraphs:
-            yield p
-        for t in parent.tables:
-            for row in t.rows:
-                for cell in row.cells:
-                    for item in iter_block_items(cell):
-                        yield item
+.word-card [data-testid="stFileUploader"] button {
+    background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+    color: white !important;
+    border: none !important;
+    padding: 0.75rem 2rem !important;
+    border-radius: 12px !important;
+    font-weight: 600 !important;
+    font-size: 0.95rem !important;
+    transition: all 0.2s ease !important;
+}
 
+.word-card [data-testid="stFileUploader"] button:hover {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
+}
 
-def replace_everywhere(doc: Document, repl_func):
-    for item in iter_block_items(doc):
-        if isinstance(item, Paragraph):
-            replace_in_paragraph(item, repl_func)
-    for section in doc.sections:
-        for container in (section.header, section.footer):
-            for item in iter_block_items(container):
-                if isinstance(item, Paragraph):
-                    replace_in_paragraph(item, repl_func)
+/* 공통 파일 업로더 스타일 */
+[data-testid="stFileUploader"] section {
+    border: none !important;
+    padding: 0 !important;
+    background: transparent !important;
+}
 
+[data-testid="stFileUploader"] label {
+    display: none !important;
+}
 
-def make_replacer(ws):
-    def _repl(text: str) -> str:
-        def sub(m):
-            addr, fmt = m.group(1), m.group(2)
-            try:
-                v = ws[addr].value
-            except Exception:
-                v = None
-            return apply_inline_format(v, fmt)
+/* 업로드 완료 표시 숨김 */
+[data-testid="stUploadedFile"],
+[data-testid="stUploadedFileName"] {
+    display: none !important;
+}
 
-        replaced = TOKEN_RE.sub(sub, text)
+/* 옵션 영역 */
+.options-section {
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 2rem;
+    border: 2px solid #e2e8f0;
+    margin-bottom: 2rem;
+}
 
-        today = datetime.today()
-        today_str = f"{today.year}년 {today.month}월 {today.day}일"
-        for token in ("YYYY년 MM월 DD일", "YYYY 년 MM 월 DD 일"):
-            replaced = replaced.replace(token, today_str)
+/* 셀렉트 박스 */
+[data-testid="stSelectbox"] label {
+    font-weight: 600 !important;
+    color: #1e293b !important;
+    font-size: 1rem !important;
+    margin-bottom: 0.5rem !important;
+}
 
-        return replaced
+[data-testid="stSelectbox"] > div > div {
+    border-radius: 12px !important;
+    border: 2px solid #e2e8f0 !important;
+    background: #ffffff !important;
+    padding: 0.7rem 1rem !important;
+    font-size: 0.95rem !important;
+    transition: all 0.2s ease;
+}
 
-    return _repl
+[data-testid="stSelectbox"] > div > div:hover,
+[data-testid="stSelectbox"] > div > div:focus-within {
+    border-color: #3b82f6 !important;
+}
 
+/* 텍스트 입력 */
+input[type="text"] {
+    border-radius: 12px !important;
+    padding: 0.85rem 1.2rem !important;
+    border: 2px solid #e2e8f0 !important;
+    font-size: 0.95rem !important;
+    transition: all 0.2s ease;
+    background: #ffffff !important;
+}
 
-# ---------- 엑셀/워드 로드 & PDF 변환 ---------- #
+input[type="text"]:focus {
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    outline: none !important;
+}
 
-def load_workbook_from_bytes(data: bytes, filename: str = "file.xlsx") -> Workbook:
-    if not data:
-        raise InvalidFileException("엑셀 파일이 비어 있습니다 (0 bytes).")
-    try:
-        return load_workbook(filename=io.BytesIO(data), data_only=True)
-    except BadZipFile:
-        raise InvalidFileException("엑셀 파일이 손상되었거나 XLS 형식일 수 있습니다.")
-    except Exception as e:
-        raise InvalidFileException(f"엑셀 파일 로드 오류: {e}")
+/* 버튼 - 상단 바 */
+.top-bar-inner .stButton > button {
+    height: 44px !important;
+    border-radius: 10px !important;
+    font-weight: 700 !important;
+    font-size: 0.95rem !important;
+    background: #ffffff !important;
+    color: #1e293b !important;
+    border: none !important;
+    padding: 0 2rem !important;
+    transition: all 0.2s ease;
+}
 
+.top-bar-inner .stButton > button:hover {
+    background: #f1f5f9 !important;
+    transform: translateY(-1px);
+}
 
-def convert_docx_to_pdf_bytes(docx_bytes: bytes) -> Optional[bytes]:
-    """
-    DOCX → PDF 변환.
-    - 1순위: Windows + MS Word(docx2pdf)
-    - 2순위: LibreOffice(soffice)
-    """
-    try:
-        with tempfile.TemporaryDirectory() as td:
-            in_path = os.path.join(td, "doc.docx")
-            out_path = os.path.join(td, "doc.pdf")
+/* 버튼 - 일반 */
+.stButton > button,
+[data-testid="stDownloadButton"] > button {
+    height: 52px !important;
+    border-radius: 12px !important;
+    font-weight: 700 !important;
+    font-size: 1rem !important;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+    color: #ffffff !important;
+    border: none !important;
+    padding: 0 2.5rem !important;
+    transition: all 0.25s ease;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+}
 
-            with open(in_path, "wb") as f:
-                f.write(docx_bytes)
+.stButton > button:hover,
+[data-testid="stDownloadButton"] > button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+}
 
-            system = platform.system().lower()
+/* 성공/에러 메시지 */
+.stSuccess {
+    background: #f0fdf4 !important;
+    border-left: 4px solid #22c55e !important;
+    color: #166534 !important;
+    border-radius: 12px !important;
+    padding: 1rem 1.2rem !important;
+    font-weight: 500 !important;
+}
 
-            # 1) Windows + docx2pdf (Word) 우선
-            if system == "windows" and docx2pdf_convert is not None:
-                try:
-                    st.info("PDF 변환: MS Word(docx2pdf) 엔진 사용 중...")
-                    docx2pdf_convert(in_path, out_path)
-                    if os.path.exists(out_path):
-                        with open(out_path, "rb") as f:
-                            return f.read()
-                except Exception as e:
-                    st.warning(f"MS Word(docx2pdf) 변환 실패, LibreOffice로 재시도합니다. ({e})")
+.stError {
+    background: #fef2f2 !important;
+    border-left: 4px solid #ef4444 !important;
+    color: #991b1b !important;
+    border-radius: 12px !important;
+    padding: 1rem 1.2rem !important;
+    font-weight: 500 !important;
+}
 
-            # 2) LibreOffice(soffice)
-            if has_soffice():
-                try:
-                    st.info("PDF 변환: LibreOffice(soffice) 엔진 사용 중 (폰트가 일부 바뀔 수 있습니다).")
-                    subprocess.run(
-                        [
-                            "soffice",
-                            "--headless",
-                            "--convert-to",
-                            "pdf",
-                            in_path,
-                            "--outdir",
-                            td,
-                        ],
-                        check=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                    )
-                    if os.path.exists(out_path):
-                        with open(out_path, "rb") as f:
-                            return f.read()
-                except Exception as e:
-                    st.error(f"LibreOffice 변환 실패: {e}")
+.stInfo {
+    background: #eff6ff !important;
+    border-left: 4px solid #3b82f6 !important;
+    color: #1e40af !important;
+    border-radius: 12px !important;
+    padding: 1rem 1.2rem !important;
+    font-weight: 500 !important;
+}
 
-    except Exception as e:
-        st.error(f"PDF 변환 중 예외 발생: {e}")
+/* 진행바 */
+[data-testid="stProgress"] > div {
+    background-color: #e5e7eb !important;
+    border-radius: 999px !important;
+    height: 6px !important;
+}
 
-    return None
+[data-testid="stProgress"] > div > div {
+    background: linear-gradient(90deg, #6366f1, #8b5cf6) !important;
+    border-radius: 999px !important;
+}
 
+/* 구분선 제거 */
+hr {
+    display: none !important;
+}
 
-# ---------- Streamlit UI ---------- #
+/* 컬럼 간격 */
+[data-testid="column"] {
+    padding: 0 0.75rem !important;
+}
 
-def init_session_state():
-    for key in ("xlsx_data", "xlsx_name", "docx_data", "docx_name"):
-        if key not in st.session_state:
-            st.session_state[key] = None
+[data-testid="column"]:first-child {
+    padding-left: 0 !important;
+}
 
+[data-testid="column"]:last-child {
+    padding-right: 0 !important;
+}
 
-def render_top_bar() -> bool:
-    """상단 고정 ZIP 생성 버튼."""
-    st.markdown('<div class="top-bar"><div class="top-bar-inner">', unsafe_allow_html=True)
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.markdown(
-            '<div class="top-bar-title">📦 납입요청서 일괄 생성 도구</div>',
-            unsafe_allow_html=True,
-        )
-    with col2:
-        gen_top = st.button("ZIP 생성", key="btn_top", use_container_width=True)
-    st.markdown("</div></div>", unsafe_allow_html=True)
-    return gen_top
+/* 빈 요소 제거 */
+div[data-testid="stMarkdownContainer"] p:empty {
+    display: none !important;
+}
 
+/* 여백 정리 */
+.stMarkdown {
+    margin-bottom: 0 !important;
+}
 
-def render_file_uploads():
-    """파일 업로드 카드 2개를 가로로 배치"""
-    col1, col2 = st.columns(2, gap="large")
+/* 스피너 */
+[data-testid="stSpinner"] > div {
+    border-color: #6366f1 !important;
+}
+
+/* 애니메이션 */
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.excel-card, .word-card {
+    animation: slideUp 0.5s ease-out backwards;
+}
+
+.excel-card {
+    animation-delay: 0.1s;
+}
+
+.word-card {
+    animation-delay: 0.2s;
+}
+
+/* 다크 모드 */
+@media (prefers-color-scheme: dark) {
+    html, body, [data-testid="stAppViewContainer"] {
+        background: #0f172a;
+    }
     
-    with col1:
-        st.markdown('''
-        <div class="excel-card">
-            <div class="card-icon">📊</div>
-            <div class="card-title">엑셀 파일</div>
-            <div class="card-description">청약/납입 데이터가 들어있는 엑셀 파일</div>
-        </div>
-        ''', unsafe_allow_html=True)
-        
-        xlsx_file = st.file_uploader("엑셀 업로드", type=["xlsx", "xlsm"], key="xlsx", label_visibility="collapsed")
-        if xlsx_file is not None:
-            try:
-                data = xlsx_file.getvalue()
-                if data:
-                    st.session_state.xlsx_data = data
-                    st.session_state.xlsx_name = xlsx_file.name
-                    st.success(f"✓ {xlsx_file.name} ({len(data):,} bytes)")
-                else:
-                    st.error("엑셀 파일이 0 bytes입니다.")
-            except Exception as e:
-                st.error(f"엑셀 파일 읽기 오류: {e}")
+    .block-container {
+        background: #0f172a;
+    }
     
-    with col2:
-        st.markdown('''
-        <div class="word-card">
-            <div class="card-icon">📝</div>
-            <div class="card-title">워드 템플릿</div>
-            <div class="card-description">{{A1}}, {{B5|#,###}} 형식의 태그가 포함된 템플릿</div>
-        </div>
-        ''', unsafe_allow_html=True)
-        
-        docx_file = st.file_uploader("워드 템플릿 업로드", type=["docx"], key="docx", label_visibility="collapsed")
-        if docx_file is not None:
-            try:
-                data = docx_file.getvalue()
-                if data:
-                    st.session_state.docx_data = data
-                    st.session_state.docx_name = docx_file.name
-                    st.success(f"✓ {docx_file.name} ({len(data):,} bytes)")
-                else:
-                    st.error("워드 템플릿이 0 bytes입니다.")
-            except Exception as e:
-                st.error(f"워드 파일 읽기 오류: {e}")
-
-
-def render_options():
-    """옵션 설정 영역"""
-    st.markdown('<div style="height: 2rem;"></div>', unsafe_allow_html=True)
+    h1 {
+        color: #f1f5f9 !important;
+    }
     
-    st.markdown('<div class="options-section">', unsafe_allow_html=True)
+    .app-subtitle {
+        color: #94a3b8;
+    }
     
-    sheet_choice = None
-    if st.session_state.xlsx_data:
-        try:
-            wb = load_workbook_from_bytes(
-                st.session_state.xlsx_data, st.session_state.xlsx_name
-            )
-            sheets = wb.sheetnames
-            index = sheets.index(TARGET_SHEET) if TARGET_SHEET in sheets else 0
-            
-            col1, col2 = st.columns(2, gap="large")
-            with col1:
-                sheet_choice = st.selectbox("📑 사용할 시트", sheets, index=index)
-            with col2:
-                out_name = st.text_input("📄 출력 파일명", value=DEFAULT_OUT)
-        except Exception as e:
-            st.error(f"엑셀 시트 읽기 오류: {e}")
-            out_name = DEFAULT_OUT
-    else:
-        out_name = st.text_input("📄 출력 파일명", value=DEFAULT_OUT)
+    .top-bar-inner {
+        background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
     
-    st.markdown('</div>', unsafe_allow_html=True)
+    /* 엑셀 카드 - 다크 모드 */
+    .excel-card {
+        background: #1e293b;
+        border-color: #065f46;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+    }
     
-    st.markdown('<div style="height: 2rem;"></div>', unsafe_allow_html=True)
-    gen_bottom = st.button("🚀 ZIP 생성", key="btn_bottom", use_container_width=True)
+    .excel-card:hover {
+        border-color: #10b981;
+        box-shadow: 0 8px 24px rgba(16, 185, 129, 0.25);
+    }
     
-    return sheet_choice, out_name, gen_bottom
+    .excel-card .card-title {
+        color: #6ee7b7;
+    }
+    
+    .excel-card .card-description {
+        color: #6ee7b7;
+    }
+    
+    .excel-card [data-testid="stFileUploader"] {
+        background: rgba(16, 185, 129, 0.05);
+        border-color: #065f46;
+    }
+    
+    .excel-card [data-testid="stFileUploader"]:hover {
+        background: rgba(16, 185, 129, 0.1);
+        border-color: #10b981;
+    }
+    
+    /* 워드 카드 - 다크 모드 */
+    .word-card {
+        background: #1e293b;
+        border-color: #1e40af;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+    }
+    
+    .word-card:hover {
+        border-color: #3b82f6;
+        box-shadow: 0 8px 24px rgba(59, 130, 246, 0.25);
+    }
+    
+    .word-card .card-title {
+        color: #93c5fd;
+    }
+    
+    .word-card .card-description {
+        color: #93c5fd;
+    }
+    
+    .word-card [data-testid="stFileUploader"] {
+        background: rgba(59, 130, 246, 0.05);
+        border-color: #1e40af;
+    }
+    
+    .word-card [data-testid="stFileUploader"]:hover {
+        background: rgba(59, 130, 246, 0.1);
+        border-color: #3b82f6;
+    }
+    
+    /* 옵션 섹션 - 다크 모드 */
+    .options-section {
+        background: #1e293b;
+        border-color: #334155;
+    }
+    
+    [data-testid="stSelectbox"] label {
+        color: #f1f5f9 !important;
+    }
+    
+    [data-testid="stSelectbox"] > div > div {
+        background: #0f172a !important;
+        border-color: #334155 !important;
+        color: #f1f5f9 !important;
+    }
+    
+    [data-testid="stSelectbox"] > div > div:hover {
+        border-color: #3b82f6 !important;
+    }
+    
+    input[type="text"] {
+        background: #0f172a !important;
+        border-color: #334155 !important;
+        color: #f1f5f9 !important;
+    }
+    
+    input[type="text"]:focus {
+        border-color: #3b82f6 !important;
+    }
+}
 
+/* 반응형 */
+@media (max-width: 768px) {
+    .upload-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .top-bar-inner {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+}
+"""
 
-def handle_generate(sheet_choice: Optional[str], out_name: str):
-    if not st.session_state.xlsx_data or not st.session_state.docx_data:
-        st.error("엑셀과 워드 템플릿을 모두 업로드하세요.")
-        return
+def inject():
+    st.markdown(f"<style>{BASE_CSS}</style>", unsafe_allow_html=True)
 
-    progress = st.progress(0)
-    try:
-        with st.spinner("ZIP 생성 중입니다..."):
-            # 1) 엑셀 로드
-            progress.progress(10)
-            wb = load_workbook_from_bytes(
-                st.session_state.xlsx_data, st.session_state.xlsx_name
-            )
-            ws = (
-                wb[sheet_choice]
-                if sheet_choice
-                else (
-                    wb[TARGET_SHEET]
-                    if TARGET_SHEET in wb.sheetnames
-                    else wb[wb.sheetnames[0]]
-                )
-            )
+def h4(text: str):
+    st.markdown(f'<div class="card-title">{text}</div>', unsafe_allow_html=True)
 
-            # 2) 워드 템플릿 로드
-            progress.progress(35)
-            doc = Document(io.BytesIO(st.session_state.docx_data))
+def section_caption(text: str):
+    st.markdown(f'<div class="card-description">{text}</div>', unsafe_allow_html=True)
 
-            # 3) 치환
-            replacer = make_replacer(ws)
-            replace_everywhere(doc, replacer)
-            progress.progress(60)
-
-            # 4) DOCX 저장
-            buf = io.BytesIO()
-            doc.save(buf)
-            buf.seek(0)
-            docx_bytes = buf.getvalue()
-            progress.progress(75)
-
-            # 5) PDF 변환
-            pdf_bytes = convert_docx_to_pdf_bytes(docx_bytes)
-            pdf_ok = pdf_bytes is not None
-            progress.progress(90)
-
-        progress.progress(100)
-
-    except InvalidFileException as e:
-        st.error(str(e))
-        return
-    except Exception as e:
-        st.exception(e)
-        return
-
-    st.success("✅ ZIP 파일이 준비되었습니다!")
-    render_zip_download(docx_bytes, pdf_bytes, pdf_ok, out_name)
-
-
-def render_zip_download(
-    docx_bytes: bytes,
-    pdf_bytes: Optional[bytes],
-    pdf_ok: bool,
-    out_name: str,
-):
-    zip_buf = io.BytesIO()
-    with ZipFile(zip_buf, "w", ZIP_DEFLATED) as zf:
-        docx_name = ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT
-        zf.writestr(docx_name, docx_bytes)
-
-        if pdf_ok and pdf_bytes:
-            pdf_name = ensure_pdf(out_name)
-            zf.writestr(pdf_name, pdf_bytes)
-
-    zip_buf.seek(0)
-
-    base_zip_name = (ensure_docx(out_name) if out_name.strip() else DEFAULT_OUT)
-    base_zip_name = base_zip_name.replace(".docx", "")
-    zip_name = f"{base_zip_name}_both.zip"
-
-    st.download_button(
-        "📥 ZIP 다운로드 (WORD + PDF)",
-        data=zip_buf,
-        file_name=zip_name,
-        use_container_width=True,
-    )
-
-
-# ---------- main ---------- #
-
-def main():
-    inject_style()
-    init_session_state()
-
-    st.title("납입요청서 자동 생성")
-    st.markdown(
-        '<div class="app-subtitle">엑셀 데이터와 워드 템플릿을 결합해 납입요청서 DOCX/PDF를 만들고, ZIP으로 일괄 다운로드하는 도구입니다.</div>',
-        unsafe_allow_html=True,
-    )
-
-    gen_top = render_top_bar()
-    render_file_uploads()
-    sheet_choice, out_name, gen_bottom = render_options()
-
-    generate = gen_top or gen_bottom
-    if generate:
-        handle_generate(sheet_choice, out_name)
-
-
-if __name__ == "__main__":
-    main()
+def small_note(text: str):
+    st.markdown(f'<div class="card-description">{text}</div>', unsafe_allow_html=True)
