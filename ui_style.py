@@ -74,6 +74,10 @@ footer {visibility: hidden;}
     border-radius: 14px;
 }
 
+[data-testid="stUploadedFile"] {
+    display: none !important;
+}
+
 /* 텍스트 입력 */
 input[type="text"] {
     border-radius: 10px !important;
